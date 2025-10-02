@@ -10,6 +10,17 @@ import { useNavigate, useParams } from 'react-router-dom';
 import CloseIcon from '@mui/icons-material/Close';
 import HelpIcon from '@mui/icons-material/Help';
 import { API_URL } from './constants';
+import { bridgeFetch } from "./api";
+
+function alleleJsonFilename(type:string, uiMethod:string):string{
+  const safe = uiMethod.replace(/\s+/g, "_");
+  return `${safe}_${type}.json`;
+}
+
+const alleleJsonModules = import.meta.glob<Record<string,string[]>>(
+  "./alleles/*.json",
+  { eager: true, import: "default" }
+);
 
   const CenteredGridRow = ({ children }: { children: React.ReactNode }) => (
     <Box display="flex" justifyContent="center" flexWrap="wrap">
@@ -90,58 +101,62 @@ export default function Home() {
   };
 
   useEffect(() => {
-    // Reset state when type changes
+    // Reset UI whenever the page type or method changes
     setSelectedSpeciesLocus([]);
     setMhcAlleles([]);
     setSelectedMhcAlleles([]);
-    setSelectedMethod('');
-    if (type === 'mhcii') {
-      setSelectedMethod('netmhciipan_el');
-    } else if (type === 'mhci') {
-      setSelectedMethod('netmhcpan_el-4.1');
-    }
-  }, [type]);
+    setErrorMessage(null);
 
-  useEffect(()=> {
-    setSelectedSpeciesLocus([]);
-    setMhcAlleles([]);
-    setSelectedMhcAlleles([]);
-    if (selectedMethod !== '') { 
-    setLoading(true);
-    fetch(`${API_URL}/alleles?type=${encodeURIComponent(type)}&method=${encodeURIComponent(selectedMethod)}`)
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('Failed to fetch alleles');
+    const loadAlleleBucketsFromLocalJson = async () => {
+      try {
+        if(!type) return;
+        setLoading(true);
+
+        // Use current UI method, or fallback default per type
+        const uiMethod =
+          selectedMethod ||
+          (type === "mhci" ? "netmhcpan_el-4.1" : "netmhciipan_el");
+
+        // Resolve filename and a map key that matches import.meta.glob output
+        const filename = alleleJsonFilename(type, uiMethod);
+        const mapKey = `./alleles/${filename}`;
+
+        // Pull the pre-bundled JSON from the glob map
+        const data = alleleJsonModules[mapKey];
+
+        if(!data){
+          // Helpful error that lists what we actually have in /src/alleles
+          const available = Object.keys(alleleJsonModules).sort().join("\n  - ");
+          throw new Error(
+            `Missing allele JSON: ${mapKey}\nMake sure this file exists in src/alleles/.\nAvailable files:\n  - ${available}`
+          );
         }
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          return response.json();
-        } else {
-          return response.text().then(text => {
-            throw new Error(`Unexpected response format: ${text}`);
-          });
-        }
-      }) 
-        .then(data => {
+
+        // data is already the bucketed form {human:[...], cow:[...], ...}
         setSpeciesLocusToMhcAlleles(data);
-        setLoading(false);
-      })
-      .catch((error) => {
-        setErrorMessage(error.message);
-        checkAlive();
-      });
-    }
-    // eslint-disable-next-line
-  }, [selectedMethod]);
 
-  const checkAlive = async () => {
-    try {
-      const response = await fetch(`${API_URL}/alive`);
-      setIsAlive(response.ok);
-    } catch (error) {
-      setIsAlive(false);
-    }
-  };
+        // Pick a default species/locus that has entries
+        const firstNonEmpty =
+          Object.entries(data).find(([, arr]) => (arr?.length || 0) > 0)?.[0] ||
+          Object.keys(data)[0] ||
+          "human";
+
+        setSelectedSpeciesLocus([firstNonEmpty]);
+        setMhcAlleles(data[firstNonEmpty] || []);
+      } catch(err:any){
+        setErrorMessage(
+          `Failed to load local allele definitions for ${type}/${selectedMethod || "(default)"} — ${err?.message || err}`
+        );
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadAlleleBucketsFromLocalJson();
+  }, [type, selectedMethod]); // IMPORTANT: re-run when method changes
+
+
 
   const navigate = useNavigate();
 
@@ -155,38 +170,113 @@ export default function Home() {
   
   const [selectedDigits, setSelectedDigits] = useState([]);
   
-  interface Payload {
-    method: string;
-    sequence_text: string;
-    speciesLocus: string;
-    allele: string;
-    length: number;
-  }
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormLoading(true);
-    const formData = new FormData(event.currentTarget);
-    const formJson = Object.fromEntries((formData as any).entries());
+    setErrorMessage(null);
 
-    const proteinSequences = formJson.proteinSequence.split('\n').filter((seq: string) => seq.trim() !== '');
+    try {
+      const formData = new FormData(event.currentTarget);
+      const formJson = Object.fromEntries((formData as any).entries());
 
-    const payloads : Payload[] = proteinSequences.flatMap((sequence: string) =>
-      selectedMhcAlleles.flatMap((allele) =>
-        selectedDigits.map((length) => ({
-          method: formJson.predictionMethod,
-          sequence_text: sequence,
-          speciesLocus: selectedSpeciesLocus,
-          allele,
-          length,
-        }))
-      )
-    );
-    navigate('/results', {
-      state: {
-        payloads: payloads,
-        type: type,
-      },
-    });
+      // 1) Gather sequences: one per line, ignore blanks
+      const proteinSequences: string[] = (formJson.proteinSequence || "")
+        .toString()
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      if (proteinSequences.length === 0) {
+        throw new Error("Please enter at least one protein sequence.");
+      }
+
+      // 2) Map your UI method values to NG Tools method strings
+      //    (use binding-only here; extend as desired)
+      const mapMethod = (toolType: string, uiMethod: string): string | null => {
+        if (toolType === "mhci") {
+          if (uiMethod === "netmhcpan_el-4.1") return "netmhcpan_el";
+          if (uiMethod === "netmhcpan_ba-4.1") return "netmhcpan_ba";
+          // You can add additional supported MHCI methods here as NG Tools supports them.
+          return null; // unsupported/legacy option from old site
+        } else {
+          // mhcii
+          if (uiMethod === "netmhciipan_el") return "netmhciipan_el";
+          if (uiMethod === "netmhciipan_ba") return "netmhciipan_ba";
+          // Add more if NG Tools supports them; old "Consensus/NN_align" may not exist here.
+          return null;
+        }
+      };
+
+      const toolGroup = (type === "mhcii") ? "mhcii" : "mhci";
+      const ngMethod = mapMethod(toolGroup, (formJson.predictionMethod || "").toString());
+      if (!ngMethod) {
+        throw new Error(
+          `The selected method "${formJson.predictionMethod}" isn’t available in the Next-Gen API. Choose a NetMHCpan (MHCI) or NetMHCIIpan (MHCII) method.`
+        );
+      }
+
+      // 3) Alleles: NG Tools expects a comma-separated string (not array)
+      //    Ref example payloads show "alleles": "H2-Kb,H2-Db"
+      //    https://nextgen-tools.iedb.org/docs/api/endpoints/api_references.html
+      const alleleCsv = (selectedMhcAlleles || []).join(",");
+      if (!alleleCsv) {
+        throw new Error("Please select or enter at least one MHC allele.");
+      }
+
+      // 4) Peptide length range: NG Tools uses [min, max] (not a list)
+      //    We’ll convert your selectedDigits[] to [min, max]
+      if (!Array.isArray(selectedDigits) || selectedDigits.length === 0) {
+        throw new Error("Please select at least one peptide length.");
+      }
+      const minLen = Math.min(...selectedDigits as number[]);
+      const maxLen = Math.max(...selectedDigits as number[]);
+
+      // 5) Build input_sequence_text (FASTA headers optional; plain lines are fine)
+      //    Docs show both FASTAish and plain sequence examples.
+      //    https://nextgen-tools.iedb.org/docs/api/endpoints/api_references.html
+      const input_sequence_text = proteinSequences.join("\n");
+
+      // 6) Construct the pipeline payload per NG Tools
+      const pipelineBody = {
+        pipeline_title: "",
+        run_stage_range: [1, 1],
+        stages: [
+          {
+            stage_number: 1,
+            tool_group: toolGroup, // "mhci" or "mhcii"
+            input_sequence_text,
+            input_parameters: {
+              alleles: alleleCsv,
+              peptide_length_range: [minLen, maxLen],
+              predictors: [
+                {
+                  type: "binding",
+                  method: ngMethod,
+                },
+              ],
+            },
+          },
+        ],
+      };
+
+      const { ok, status, statusText, data } = await bridgeFetch<any>(`${API_URL}/pipeline`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(pipelineBody),
+      });
+      if (!ok) throw new Error(`Pipeline request failed (${status}): ${statusText}`);
+
+      if (!data?.results_uri && !data?.result_id) {
+        throw new Error("Pipeline submitted but no results handle was returned.");
+      }
+      navigate("/results", { state: { type, result_id: data.result_id, results_uri: data.results_uri } });
+
+    } catch (e: any) {
+      setErrorMessage(e.message || "Unexpected error during submission.");
+      setIsAlive(false); // keep your modal logic happy if it references this
+    } finally {
+      setFormLoading(false);
+    }
   };
 
   const handleCloseError = () => {
@@ -348,6 +438,7 @@ export default function Home() {
           <Autocomplete
           multiple
           disableCloseOnSelect
+          freeSolo
           value={selectedMhcAlleles}
           options={mhcAlleles}
           onChange={(event, newValue) => {
@@ -451,13 +542,13 @@ export default function Home() {
           textAlign: 'center',
         }}
       >
-        <Typography component="body" sx={{ fontSize: 12, fontStyle: 'italic' }}>
+        <Typography component="p" sx={{ fontSize: 12, fontStyle: 'italic' }}>
           This application is currently in beta. For any errors or suggestions, please contact TMcMullen1@UFL.edu. This project is supported and sponsored by David Ostrov of the University of Florida, Department of Pathology, Immunology, and Laboratory Medicine. Created by Thomas McMullen and Andrew Jackson as part of our undergraduate senior project.
         </Typography>
-        <Typography component="body" sx={{ mt: 2, fontSize: 12, fontStyle: 'italic' }}>
+        <Typography component="p" sx={{ mt: 2, fontSize: 12, fontStyle: 'italic' }}>
           We gratefully acknowledge the use of IEDB tools. If you include these predictions in a manuscript, please cite the following in the methods section:
         </Typography>
-        <Typography component="body" sx={{ mt: 2, fontSize: 12, fontStyle: 'italic' }}>
+        <Typography component="p" sx={{ mt: 2, fontSize: 12, fontStyle: 'italic' }}>
           Kaabinejadian S, Barra C, Alvarez B, Yari H, Hildebrand WH, Nielsen M. 2022. Accurate MHC Motif Deconvolution of Immunopeptidomics Data Reveals a Significant Contribution of DRB3, 4 and 5 to the Total DR Immunopeptidome. Front Immunol. 13:835454. doi: 10.3389/fimmu.2022.835454.
         </Typography>
       </Box>

@@ -20,3 +20,6 @@ electron.contextBridge.exposeInMainWorld("ipcRenderer", {
   // You can expose other APTs you need here.
   // ...
 });
+electron.contextBridge.exposeInMainWorld("api", {
+  fetch: (input, init) => electron.ipcRenderer.invoke("api:fetch", { input, init })
+});

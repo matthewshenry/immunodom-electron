@@ -31,6 +31,8 @@ function createWindow() {
     icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
     },
   })
 
@@ -66,3 +68,22 @@ app.on('activate', () => {
 })
 
 app.whenReady().then(createWindow)
+
+import { ipcMain } from "electron";
+
+// Bridge network requests through the main process to avoid CORS in the renderer
+ipcMain.handle("api:fetch", async (_event, args: { input: string; init?: RequestInit }) => {
+  const { input, init } = args || {};
+  // Node 18+ has global fetch; Electron 30+ includes Node 20 so this is available.
+  const res = await fetch(input, init);
+  const bodyText = await res.text();
+  return {
+    ok: res.ok,
+    status: res.status,
+    statusText: res.statusText,
+    url: res.url,
+    headers: Object.fromEntries(res.headers.entries()),
+    body: bodyText,
+  };
+});
+

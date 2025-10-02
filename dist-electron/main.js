@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -14,7 +14,9 @@ function createWindow() {
   win = new BrowserWindow({
     icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
     webPreferences: {
-      preload: path.join(__dirname, "preload.mjs")
+      preload: path.join(__dirname, "preload.mjs"),
+      contextIsolation: true,
+      nodeIntegration: false
     }
   });
   win.webContents.on("did-finish-load", () => {
@@ -38,6 +40,19 @@ app.on("activate", () => {
   }
 });
 app.whenReady().then(createWindow);
+ipcMain.handle("api:fetch", async (_event, args) => {
+  const { input, init } = args || {};
+  const res = await fetch(input, init);
+  const bodyText = await res.text();
+  return {
+    ok: res.ok,
+    status: res.status,
+    statusText: res.statusText,
+    url: res.url,
+    headers: Object.fromEntries(res.headers.entries()),
+    body: bodyText
+  };
+});
 export {
   MAIN_DIST,
   RENDERER_DIST,

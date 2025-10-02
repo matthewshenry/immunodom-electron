@@ -18,7 +18,11 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
     const [channel, ...omit] = args
     return ipcRenderer.invoke(channel, ...omit)
   },
-
+  
   // You can expose other APTs you need here.
   // ...
 })
+contextBridge.exposeInMainWorld("api", {
+  fetch: (input: string, init?: RequestInit) =>
+    ipcRenderer.invoke("api:fetch", { input, init }),
+});
