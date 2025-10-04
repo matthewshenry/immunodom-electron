@@ -412,7 +412,7 @@ export default function Home() {
           <Typography>Loading...</Typography>
         ) : (
           <Select
-          multiple
+          //multiple
           value={selectedSpeciesLocus}
           onChange={handleSpeciesLocusChange}
           label="Select Species/Locus"
