@@ -229,7 +229,7 @@ export default function Results() {
       //calculate kd if not given, doesn't seem to be given usually
       let kdVal: number|null = null;
       if(Number.isFinite(ic50)) kdVal = ic50;
-      else if(Number.isFinite(score)) kdVal = Math.pow(50000, 1 - score);
+      else if(Number.isFinite(score)) kdVal = Math.round(Math.pow(50000, 1 - score));
       const rankVal = idxRank >= 0 ? Number(r[idxRank]) : NaN;
       const seqTxt = idxSeqTxt >= 0 ? String(r[idxSeqTxt]) : "";
       const method = idxMethod >= 0 ? String(r[idxMethod]) : "";
