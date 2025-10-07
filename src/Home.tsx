@@ -254,7 +254,13 @@ export default function Home() {
           },
         ],
       };
-
+      // log what we're sending to iedb
+      console.log("Submitting to IEDB pipeline:", {
+        url: `${API_URL}/pipeline`,
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: pipelineBody,
+      });
       const { ok, status, statusText, data } = await bridgeFetch<any>(`${API_URL}/pipeline`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -408,7 +414,7 @@ export default function Home() {
           <Typography>Loading...</Typography>
         ) : (
           <Select
-          //multiple
+          multiple
           value={selectedSpeciesLocus}
           onChange={handleSpeciesLocusChange}
           label="Select Species/Locus"

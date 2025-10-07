@@ -64,10 +64,11 @@ type DataRowGraph = {
   start: number;
   end: number;
   length: number;
-  core_peptide: string;
   peptide: string;
-  kd: number | null;
+  core_peptide: string;
+  score: number | null;
   percentile_rank: number;
+  kd: number;
   sequence_text: string;
   method: string;
   datasetIndex: number;
@@ -208,7 +209,8 @@ export default function Results() {
     const idxLength = pickCol(cols, ["length", "peptide_length"]);
     const idxCore = pickCol(cols, ["core_peptide", "core"]);
     const idxPeptide = pickCol(cols, ["peptide"]);
-    const idxKD = pickCol(cols, ["kd", "ic50", "affinity", "score"]);
+    const idxIC50  = pickCol(cols, ["ic50","kd","affinity"]);
+    const idxScore = pickCol(cols, ["score"]);
     const idxRank = pickCol(cols, ["percentile", "percentile_rank", "rank"]);
     const idxSeqTxt = pickCol(cols, ["sequence_text", "input_sequence", "input"]);
     const idxMethod = pickCol(cols, ["method", "predictor", "tool"]);
@@ -222,7 +224,12 @@ export default function Results() {
       const length = idxLength >= 0 ? Number(r[idxLength]) : Math.max(1, end - start + 1);
       const core = idxCore >= 0 ? String(r[idxCore]) : "";
       const peptide = idxPeptide >= 0 ? String(r[idxPeptide]) : "";
-      const kdVal = idxKD >= 0 ? Number(r[idxKD]) : NaN;
+      const ic50   = idxIC50  >= 0 ? Number(r[idxIC50])  : NaN;
+      const score  = idxScore >= 0 ? Number(r[idxScore]) : NaN;
+      //calculate kd if not given, doesn't seem to be given usually
+      let kdVal: number|null = null;
+      if(Number.isFinite(ic50)) kdVal = ic50;
+      else if(Number.isFinite(score)) kdVal = Math.pow(50000, 1 - score);
       const rankVal = idxRank >= 0 ? Number(r[idxRank]) : NaN;
       const seqTxt = idxSeqTxt >= 0 ? String(r[idxSeqTxt]) : "";
       const method = idxMethod >= 0 ? String(r[idxMethod]) : "";
@@ -236,7 +243,8 @@ export default function Results() {
         length,
         core_peptide: core,
         peptide,
-        kd: isFinite(kdVal) ? kdVal : null,
+        kd: kdVal,
+        score: Number.isFinite(score) ? score : null,
         percentile_rank: isFinite(rankVal) ? rankVal : NaN,
         sequence_text: seqTxt,
         method,
@@ -245,10 +253,13 @@ export default function Results() {
       };
     });
 
+    const KD_THRESHOLD = 10000;
+    const filtered = normalized.filter(row => Number.isFinite(row.kd as number) && (row.kd as number) < KD_THRESHOLD);
+
     // Group by allele
     const byAllele = new Map<string, DataRowGraph[]>();
-    for (const row of normalized) {
-      if (!byAllele.has(row.allele)) byAllele.set(row.allele, []);
+    for(const row of filtered){
+      if(!byAllele.has(row.allele)) byAllele.set(row.allele, []);
       byAllele.get(row.allele)!.push(row);
     }
 
@@ -277,7 +288,7 @@ export default function Results() {
     setFilteredDataForTable(merged);
 
     if (merged.length > 0) {
-      const headers = Object.keys(merged[0]).filter((h) => h !== "color");
+      const headers = Object.keys(merged[0]).filter((h) => h !== "color" && h !== "seq_num");
       const idx = headers.indexOf("sequence_text");
       if (idx > -1) {
         headers.splice(idx, 1);
