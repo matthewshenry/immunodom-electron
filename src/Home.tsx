@@ -179,7 +179,7 @@ export default function Home() {
       const formData = new FormData(event.currentTarget);
       const formJson = Object.fromEntries((formData as any).entries());
 
-      // 1) Gather sequences: one per line, ignore blanks
+      // 1) Gather sequences, one per line
       const proteinSequences: string[] = (formJson.proteinSequence || "")
         .toString()
         .split("\n")
@@ -190,19 +190,17 @@ export default function Home() {
         throw new Error("Please enter at least one protein sequence.");
       }
 
-      // 2) Map your UI method values to NG Tools method strings
-      //    (use binding-only here; extend as desired)
+      // 2) Map your UI method values to IEDB method strings
       const mapMethod = (toolType: string, uiMethod: string): string | null => {
         if (toolType === "mhci") {
           if (uiMethod === "netmhcpan_el-4.1") return "netmhcpan_el";
           if (uiMethod === "netmhcpan_ba-4.1") return "netmhcpan_ba";
-          // You can add additional supported MHCI methods here as NG Tools supports them.
-          return null; // unsupported/legacy option from old site
+          return null;
         } else {
           // mhcii
           if (uiMethod === "netmhciipan_el") return "netmhciipan_el";
           if (uiMethod === "netmhciipan_ba") return "netmhciipan_ba";
-          // Add more if NG Tools supports them; old "Consensus/NN_align" may not exist here.
+          // Add more
           return null;
         }
       };
@@ -216,7 +214,6 @@ export default function Home() {
       }
 
       // 3) Alleles: NG Tools expects a comma-separated string (not array)
-      //    Ref example payloads show "alleles": "H2-Kb,H2-Db"
       //    https://nextgen-tools.iedb.org/docs/api/endpoints/api_references.html
       const alleleCsv = (selectedMhcAlleles || []).join(",");
       if (!alleleCsv) {
@@ -224,7 +221,7 @@ export default function Home() {
       }
 
       // 4) Peptide length range: NG Tools uses [min, max] (not a list)
-      //    We’ll convert your selectedDigits[] to [min, max]
+      //    convert selectedDigits[] to [min, max]
       if (!Array.isArray(selectedDigits) || selectedDigits.length === 0) {
         throw new Error("Please select at least one peptide length.");
       }
@@ -232,11 +229,10 @@ export default function Home() {
       const maxLen = Math.max(...selectedDigits as number[]);
 
       // 5) Build input_sequence_text (FASTA headers optional; plain lines are fine)
-      //    Docs show both FASTAish and plain sequence examples.
       //    https://nextgen-tools.iedb.org/docs/api/endpoints/api_references.html
       const input_sequence_text = proteinSequences.join("\n");
 
-      // 6) Construct the pipeline payload per NG Tools
+      // 6) Construct the pipeline payload per NG IEDB
       const pipelineBody = {
         pipeline_title: "",
         run_stage_range: [1, 1],
@@ -273,7 +269,7 @@ export default function Home() {
 
     } catch (e: any) {
       setErrorMessage(e.message || "Unexpected error during submission.");
-      setIsAlive(false); // keep your modal logic happy if it references this
+      setIsAlive(false); // legacy, may need fix
     } finally {
       setFormLoading(false);
     }
