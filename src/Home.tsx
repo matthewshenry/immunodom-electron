@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import CloseIcon from '@mui/icons-material/Close';
 import HelpIcon from '@mui/icons-material/Help';
+import Tooltip from '@mui/material/Tooltip';
 import { API_URL } from './constants';
 import { bridgeFetch } from "./api";
 
@@ -95,6 +96,15 @@ export default function Home() {
     { value: "netmhccons", label: "NetMHCcons" },
     { value: "pickpocket", label: "PickPocket" }
   ];
+
+  // Utilize alleleJsonModules to get human coverage alleles
+  const coverageData = alleleJsonModules["./alleles/human_coverage_mhcii.json"];
+  const humanCoverageAlleles =
+    (coverageData && "Human_Coverage" in coverageData)
+      ? (coverageData as any).Human_Coverage
+      : [];
+  // console.log("Loaded Human Coverage Alleles:", humanCoverageAlleles);
+  const [isCoverageSelected, setIsCoverageSelected] = useState(false);
 
   const handleMethodChange = (event: SelectChangeEvent<string>) => {
     setSelectedMethod(event.target.value);
@@ -432,31 +442,106 @@ export default function Home() {
         </Stack>
 
         <Stack spacing={0.5}>
-        <div className="mhc-alleles-container">
-        <Typography sx={{ fontSize: 14, fontWeight: 400 }}>Select MHC allele(s)</Typography>
-        {loading ? (
-          <Typography>Loading...</Typography>
-        ) : (
-          <Autocomplete
-          multiple
-          disableCloseOnSelect
-          freeSolo
-          value={selectedMhcAlleles}
-          options={mhcAlleles}
-          onChange={(event, newValue) => {
-            setSelectedMhcAlleles(newValue as string[]);
-          }}
-          renderInput={(params) => (
-            <TextField
-            {...params}
-            variant="outlined"
-            placeholder="Type to filter..."
-            className = "mhc-alleles-autocomplete"
-            />
+          <div className="mhc-alleles-container">
+          <Typography sx={{ fontSize: 14, fontWeight: 400 }}>Select MHC allele(s)</Typography>
+          {loading ? (
+            <Typography>Loading...</Typography>
+          ) : (
+            <>
+            <Tooltip
+              title={
+                <Typography sx={{ fontSize: 14, color: "#e5e7eb", lineHeight: 1.4 }}>
+                  Covers ~97% of the Human Population
+                </Typography>
+              }
+              arrow
+              placement="top"
+            >
+              <Button
+                variant="soft"
+                size="sm"
+                onClick={() => {
+                  // flat list of all alleles in current dataset
+                  const allAlleles = Object.values(speciesLocusToMhcAlleles)
+                    .flat()
+                    .map((a) => a.toUpperCase().trim());
+                  // normalize all alleles list
+                  const normalizedAllAlleles = allAlleles.map((a) =>
+                    a.startsWith("HLA-") ? a.slice(4) : a
+                  );
+                  // normalize human coverage list 
+                  const normalizedCoverage = humanCoverageAlleles.map((a) =>
+                    a.toUpperCase().replace(/^HLA-/, "").trim()
+                  );
+                  // button toggle logic
+                  if (!isCoverageSelected) {
+                    const available = normalizedCoverage.filter((a) =>
+                      normalizedAllAlleles.includes(a)
+                    );
+                    if (available.length === 0) {
+                      alert(
+                        "No matching alleles found for this predictor.\nTry switching to NetMHCIIpan EL or BA."
+                      );
+                      return;
+                    }
+                    const prefixedAvailable = available.map((a) =>
+                      a.startsWith("HLA-") ? a : `HLA-${a}`
+                    );
+                    // apply the coverage alleles
+                    setSelectedMhcAlleles(prefixedAvailable);
+                    setIsCoverageSelected(true);
+                    // console.log("Applied 27 Allele Panel:", prefixedAvailable);
+                  } else {
+                    // clear the coverage alleles
+                    setSelectedMhcAlleles([]);
+                    setIsCoverageSelected(false);
+                    // console.log("Cleared Coverage Alleles");
+                  }
+                }}
+                sx={{
+                  mb: 1,
+                  borderRadius: "6px",
+                  backgroundColor: isCoverageSelected ? "#f65959fc" : "blue",
+                  color: "#fff",
+                  fontWeight: 500,
+                  textTransform: "none",
+                  px: 2,
+                  py: 0.8,
+                  boxShadow: "0 1px 2px rgba(0,0,0,0.15)",
+                  transition: "all 0.25s ease",
+                  "&:hover": {
+                    transform: "scale(1.05)",
+                    backgroundColor: isCoverageSelected ? "#f65959fc" : "blue",
+                    boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
+                  },
+                  "&:active": { transform: "scale(0.98)" },
+                }}
+              >
+                {isCoverageSelected ? "Clear Coverage Alleles" : "27 Allele Panel"}
+              </Button>
+            </Tooltip>
+
+              <Autocomplete
+                multiple
+                disableCloseOnSelect
+                freeSolo
+                value={selectedMhcAlleles}
+                options={mhcAlleles}
+                onChange={(_, newValue) => {
+                  setSelectedMhcAlleles(newValue as string[]);
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    variant="outlined"
+                    placeholder="Type to filter..."
+                    className="mhc-alleles-autocomplete"
+                  />
+                )}
+              />
+            </>
           )}
-          />
-        )}
-        </div>
+          </div>
         </Stack>
 
         <Stack> 
