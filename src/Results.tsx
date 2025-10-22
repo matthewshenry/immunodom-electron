@@ -77,10 +77,15 @@ type DataRowGraph = {
 
 // helpers 
 const generateColors = (n: number) =>
-  Array.from({ length: n }, (_, i) => `hsl(${(i * 360) / Math.max(1, n)}, 50%, 40%)`);
+  Array.from(
+    { length: n },
+    (_, i) => `hsl(${(i * 360) / Math.max(1, n)}, 50%, 40%)`
+  );
 
 const pickCol = (cols: TableColumn[], aliases: string[]): number => {
-  const norm = cols.map((c) => (c.name || c.display_name || "").toLowerCase().trim());
+  const norm = cols.map((c) =>
+    (c.name || c.display_name || "").toLowerCase().trim()
+  );
   for (const a of aliases) {
     const i = norm.indexOf(a.toLowerCase());
     if (i >= 0) return i;
@@ -94,7 +99,11 @@ const pickCol = (cols: TableColumn[], aliases: string[]): number => {
 export default function Results() {
   const navigate = useNavigate();
   const location = useLocation() as {
-    state?: { result_id?: string; results_uri?: string; type?: "mhci" | "mhcii" };
+    state?: {
+      result_id?: string;
+      results_uri?: string;
+      type?: "mhci" | "mhcii";
+    };
   };
   const runType = location.state?.type || "mhci";
   const resultId = location.state?.result_id;
@@ -125,16 +134,24 @@ export default function Results() {
   const [peptideTable, setPeptideTable] = useState<PeptideTable | null>(null);
   const [dataForGraph, setDataForGraph] = useState<DataRowGraph[][]>([]);
   const [dataForTable, setDataForTable] = useState<any[]>([]);
+  // preserve full unfiltered version of graph data
+  const [allGraphData, setAllGraphData] = useState<DataRowGraph[][]>([]);
   const [filteredDataForTable, setFilteredDataForTable] = useState<any[]>([]);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
 
   const [alleleOptions, setAlleleOptions] = useState<string[]>([]);
-  const [selectedAlleleIndices, setSelectedAlleleIndices] = useState<number[]>([]);
+  const [selectedAlleleIndices, setSelectedAlleleIndices] = useState<number[]>(
+    []
+  );
 
   const [searchModalOpen, setSearchModalOpen] = useState(false);
-  const [searchType, setSearchType] = useState<"peptide" | "core_peptide">("peptide");
+  const [searchType, setSearchType] = useState<"peptide" | "core_peptide">(
+    "peptide"
+  );
   const [searchQuery, setSearchQuery] = useState("");
-  const [startRange, setStartRange] = useState<{ start: any; end: any | null }>({ start: null, end: null });
+  const [startRange, setStartRange] = useState<{ start: any; end: any | null }>(
+    { start: null, end: null }
+  );
   const [kdStart, setKdStart] = useState<string | null>(null);
   const [kdEnd, setKdEnd] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -159,21 +176,34 @@ export default function Results() {
 
     const poll = async () => {
       try {
-        const { ok, status: http, statusText, data } = await bridgeFetch<ResultsResponse>(pollUrl, {
+        const {
+          ok,
+          status: http,
+          statusText,
+          data,
+        } = await bridgeFetch<ResultsResponse>(pollUrl, {
           method: "GET",
           headers: { Accept: "application/json" },
         });
         if (!ok) throw new Error(`Polling failed (${http}): ${statusText}`);
 
-        const s = (data?.status as ResultsResponse["status"]) || (data?.data?.results ? "done" : "pending");
+        const s =
+          (data?.status as ResultsResponse["status"]) ||
+          (data?.data?.results ? "done" : "pending");
         if (!cancelled) setStatus(s);
 
         if (s === "done") {
           const errs = data?.data?.errors;
-          if (errs && errs.length) throw new Error(`IEDB returned error: ${JSON.stringify(errs[0])}`);
+          if (errs && errs.length)
+            throw new Error(`IEDB returned error: ${JSON.stringify(errs[0])}`);
 
-          const pt = data?.data?.results?.find((r: any) => r && r.type === "peptide_table") as PeptideTable | undefined;
-          if (!pt) throw new Error("Results finished, but no peptide_table was returned.");
+          const pt = data?.data?.results?.find(
+            (r: any) => r && r.type === "peptide_table"
+          ) as PeptideTable | undefined;
+          if (!pt)
+            throw new Error(
+              "Results finished, but no peptide_table was returned."
+            );
 
           if (!cancelled) {
             setPeptideTable(pt);
@@ -187,7 +217,8 @@ export default function Results() {
           t = setTimeout(poll, 2000);
         }
       } catch (e: any) {
-        if (!cancelled) setErrorMessage(e.message || "Error while polling results.");
+        if (!cancelled)
+          setErrorMessage(e.message || "Error while polling results.");
       }
     };
 
@@ -214,52 +245,63 @@ export default function Results() {
     const idxRank = pickCol(cols, ["percentile", "percentile_rank", "rank"]);
     const idxSeqTxt = pickCol(cols, ["sequence_text", "input_sequence", "input"]);
     const idxMethod = pickCol(cols, ["method", "predictor", "tool"]);
-    const idxSeqNum = pickCol(cols, ["seq_num", "sequence_index", "sequence_no"]);
+    const idxSeqNum = pickCol(cols, [
+      "seq_num",
+      "sequence_index",
+      "sequence_no",
+    ]);
 
     // Normalize rows
-    const normalized: DataRowGraph[] = (peptideTable.table_data || []).map((r, i) => {
-      const allele = idxAllele >= 0 ? String(r[idxAllele]) : "Unknown";
-      const start = idxStart >= 0 ? Number(r[idxStart]) : i + 1;
-      const end = idxEnd >= 0 ? Number(r[idxEnd]) : start;
-      const length = idxLength >= 0 ? Number(r[idxLength]) : Math.max(1, end - start + 1);
-      const core = idxCore >= 0 ? String(r[idxCore]) : "";
-      const peptide = idxPeptide >= 0 ? String(r[idxPeptide]) : "";
-      const ic50   = idxIC50  >= 0 ? Number(r[idxIC50])  : NaN;
-      const score  = idxScore >= 0 ? Number(r[idxScore]) : NaN;
-      //calculate kd if not given, doesn't seem to be given usually
-      let kdVal: number|null = null;
-      if(Number.isFinite(ic50)) kdVal = ic50;
-      else if(Number.isFinite(score)) kdVal = Math.round(Math.pow(50000, 1 - score));
-      const rankVal = idxRank >= 0 ? Number(r[idxRank]) : NaN;
-      const seqTxt = idxSeqTxt >= 0 ? String(r[idxSeqTxt]) : "";
-      const method = idxMethod >= 0 ? String(r[idxMethod]) : "";
-      const seqNum = idxSeqNum >= 0 ? Number(r[idxSeqNum]) : 1;
+    const normalized: DataRowGraph[] = (peptideTable.table_data || []).map(
+      (r, i) => {
+        const allele = idxAllele >= 0 ? String(r[idxAllele]) : "Unknown";
+        const start = idxStart >= 0 ? Number(r[idxStart]) : i + 1;
+        const end = idxEnd >= 0 ? Number(r[idxEnd]) : start;
+        const length =
+          idxLength >= 0 ? Number(r[idxLength]) : Math.max(1, end - start + 1);
+        const core = idxCore >= 0 ? String(r[idxCore]) : "";
+        const peptide = idxPeptide >= 0 ? String(r[idxPeptide]) : "";
+        const ic50 = idxIC50 >= 0 ? Number(r[idxIC50]) : NaN;
+        const score = idxScore >= 0 ? Number(r[idxScore]) : NaN;
+        //calculate kd if not given, doesn't seem to be given usually
+        let kdVal: number | null = null;
+        if (Number.isFinite(ic50)) kdVal = ic50;
+        else if (Number.isFinite(score))
+          kdVal = Math.round(Math.pow(50000, 1 - score));
+        const rankVal = idxRank >= 0 ? Number(r[idxRank]) : NaN;
+        const seqTxt = idxSeqTxt >= 0 ? String(r[idxSeqTxt]) : "";
+        const method = idxMethod >= 0 ? String(r[idxMethod]) : "";
+        const seqNum = idxSeqNum >= 0 ? Number(r[idxSeqNum]) : 1;
 
-      return {
-        allele,
-        seq_num: isFinite(seqNum) ? seqNum : 1,
-        start,
-        end,
-        length,
-        core_peptide: core,
-        peptide,
-        kd: kdVal,
-        score: Number.isFinite(score) ? score : null,
-        percentile_rank: isFinite(rankVal) ? rankVal : NaN,
-        sequence_text: seqTxt,
-        method,
-        datasetIndex: 0,
-        color: "#000",
-      };
-    });
+        return {
+          allele,
+          seq_num: isFinite(seqNum) ? seqNum : 1,
+          start,
+          end,
+          length,
+          core_peptide: core,
+          peptide,
+          kd: kdVal,
+          score: Number.isFinite(score) ? score : null,
+          percentile_rank: isFinite(rankVal) ? rankVal : NaN,
+          sequence_text: seqTxt,
+          method,
+          datasetIndex: 0,
+          color: "#000",
+        };
+      }
+    );
 
     const KD_THRESHOLD = 10000;
-    const filtered = normalized.filter(row => Number.isFinite(row.kd as number) && (row.kd as number) < KD_THRESHOLD);
+    const filtered = normalized.filter(
+      (row) =>
+        Number.isFinite(row.kd as number) && (row.kd as number) < KD_THRESHOLD
+    );
 
     // Group by allele
     const byAllele = new Map<string, DataRowGraph[]>();
-    for(const row of filtered){
-      if(!byAllele.has(row.allele)) byAllele.set(row.allele, []);
+    for (const row of filtered) {
+      if (!byAllele.has(row.allele)) byAllele.set(row.allele, []);
       byAllele.get(row.allele)!.push(row);
     }
 
@@ -269,7 +311,9 @@ export default function Results() {
     const series: DataRowGraph[][] = [];
 
     alleleList.forEach((allele, i) => {
-      const arr = (byAllele.get(allele) || []).slice().sort((a, b) => a.start - b.start);
+      const arr = (byAllele.get(allele) || [])
+        .slice()
+        .sort((a, b) => a.start - b.start);
       const color = colors[i];
       arr.forEach((r) => {
         r.datasetIndex = i + 1;
@@ -280,7 +324,7 @@ export default function Results() {
 
     setAlleleOptions(alleleList);
     setSelectedAlleleIndices(alleleList.map((_, i) => i)); // default: select all
-    setDataForGraph(series);
+    setAllGraphData(series);
 
     // Table + CSV
     const merged = series.flat().filter((d) => d.kd !== null);
@@ -288,7 +332,9 @@ export default function Results() {
     setFilteredDataForTable(merged);
 
     if (merged.length > 0) {
-      const headers = Object.keys(merged[0]).filter((h) => h !== "color" && h !== "seq_num");
+      const headers = Object.keys(merged[0]).filter(
+        (h) => h !== "color" && h !== "seq_num"
+      );
       const idx = headers.indexOf("sequence_text");
       if (idx > -1) {
         headers.splice(idx, 1);
@@ -301,25 +347,37 @@ export default function Results() {
   // controls
   const handleResultChange = (event: SelectChangeEvent<number[]>) => {
     const val = event.target.value as number[];
+
     if (val.includes(-1)) {
-      // toggle select all
+      // Toggle Select All
       if (selectedAlleleIndices.length === alleleOptions.length) {
+        // Unselect all
         setSelectedAlleleIndices([]);
+        setDataForGraph([]);
+        setFilteredDataForTable([]);
       } else {
+        // Select all
         setSelectedAlleleIndices(alleleOptions.map((_, i) => i));
+        setDataForGraph(allGraphData);
+        setFilteredDataForTable(dataForTable);
       }
-    } else {
-      setSelectedAlleleIndices(val);
+      return;
     }
 
-    // filter datasets shown in the graph
-    const filtered = (peptideTable ? dataForGraph : []).filter((_, i) => val.includes(i));
-    setDataForGraph(filtered.length ? filtered : []);
-    // also filter table to only selected alleles
+    // Normal filtering logic
+    setSelectedAlleleIndices(val);
+
+    const filteredGraph = allGraphData.filter((_, i) => val.includes(i));
+    setDataForGraph(filteredGraph);
+
     const selectedAlleles = new Set(val.map((i) => alleleOptions[i]));
-    const tableFiltered = dataForTable.filter((r) => selectedAlleles.has(r.allele));
-    setFilteredDataForTable(tableFiltered);
+    const filteredTable = dataForTable.filter((r) =>
+      selectedAlleles.has(r.allele)
+    );
+    setFilteredDataForTable(filteredTable);
   };
+
+
 
   const handleDownload = () => {
     if (!chartContainerRef.current) return;
@@ -341,7 +399,7 @@ export default function Results() {
     const rows = [
       headers,
       ...filteredDataForTable.map((row) =>
-        headers.map((h) => (h === "datasetIndex" ? (row[h] ?? 0) : row[h]))
+        headers.map((h) => (h === "datasetIndex" ? row[h] ?? 0 : row[h]))
       ),
     ];
     const csv = rows.map((r) => r.join(",")).join("\n");
@@ -355,9 +413,12 @@ export default function Results() {
     document.body.removeChild(a);
   };
 
-  const handleLineThicknessChange = (_: Event, value: number | number[]) => setLineThickness(value as number);
-  const handleYAxisRangeChange = (e: React.ChangeEvent<HTMLInputElement>) => setYAxisRange(Number(e.target.value));
-  const handleScaleTypeChange = (e: React.ChangeEvent<HTMLInputElement>) => setScaleType(e.target.value as ScaleType);
+  const handleLineThicknessChange = (_: Event, value: number | number[]) =>
+    setLineThickness(value as number);
+  const handleYAxisRangeChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setYAxisRange(Number(e.target.value));
+  const handleScaleTypeChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setScaleType(e.target.value as ScaleType);
 
   const handleCloseError = () => setErrorMessage(null);
   const handleOpenSettings = () => setSettingsOpen(true);
@@ -365,12 +426,19 @@ export default function Results() {
 
   // search/filter
   const applyFilter = useCallback(() => {
-    if (!searchQuery && startRange.start === null && startRange.end === null && kdStart === null && kdEnd === null) {
+    if (
+      !searchQuery &&
+      startRange.start === null &&
+      startRange.end === null &&
+      kdStart === null &&
+      kdEnd === null
+    ) {
       setFilteredDataForTable(dataForTable);
       return;
     }
 
-    const startValue = startRange.start === "" ? null : Number(startRange.start);
+    const startValue =
+      startRange.start === "" ? null : Number(startRange.start);
     let endValue = startRange.end === "" ? null : Number(startRange.end);
     const kdStartValue = kdStart == null ? null : Number(kdStart);
     const kdEndValue = kdEnd == null || kdEnd === "" ? 20000 : Number(kdEnd);
@@ -381,10 +449,15 @@ export default function Results() {
       setEndError(true);
       return;
     }
-    if (kdStartValue !== null && kdEndValue !== null && kdStartValue > kdEndValue) {
+    if (
+      kdStartValue !== null &&
+      kdEndValue !== null &&
+      kdStartValue > kdEndValue
+    ) {
       setKdError(
         <Typography variant="body2" component="span">
-          K<sub>d</sub> start value must be less than or equal to K<sub>d</sub> end value.
+          K<sub>d</sub> start value must be less than or equal to K<sub>d</sub>{" "}
+          end value.
         </Typography>
       );
       return;
@@ -436,9 +509,16 @@ export default function Results() {
 
     const searchLower = (searchQuery || "").toLowerCase();
     const filtered = dataForTable.filter((row) => {
-      const peptideMatch = searchType === "peptide" && row.peptide?.toLowerCase().includes(searchLower);
-      const coreMatch = searchType === "core_peptide" && row.core_peptide?.toLowerCase().includes(searchLower);
-      const startMatch = endValue !== null ? row.start >= startValue && row.start <= endValue : row.start >= startValue;
+      const peptideMatch =
+        searchType === "peptide" &&
+        row.peptide?.toLowerCase().includes(searchLower);
+      const coreMatch =
+        searchType === "core_peptide" &&
+        row.core_peptide?.toLowerCase().includes(searchLower);
+      const startMatch =
+        endValue !== null
+          ? row.start >= startValue && row.start <= endValue
+          : row.start >= startValue;
       const kdMatch =
         kdStartValue !== null && kdEndValue !== null
           ? row.kd >= kdStartValue && row.kd <= kdEndValue
@@ -450,8 +530,12 @@ export default function Results() {
 
       const peptideCond = searchType === "peptide" ? peptideMatch : true;
       const coreCond = searchType === "core_peptide" ? coreMatch : true;
-      const startCond = startRange.start !== null || startRange.end !== null ? startMatch : true;
-      const kdCond = kdStartValue !== null || kdEndValue !== null ? kdMatch : true;
+      const startCond =
+        startRange.start !== null || startRange.end !== null
+          ? startMatch
+          : true;
+      const kdCond =
+        kdStartValue !== null || kdEndValue !== null ? kdMatch : true;
 
       return peptideCond && coreCond && startCond && kdCond;
     });
@@ -464,10 +548,19 @@ export default function Results() {
 
   // joyride steps (kept)
   const steps: Step[] = [
-    { target: ".result-dropdown", content: "Choose which alleles (datasets) to overlay on the graph." },
-    { target: ".line-graph-container", content: "Drag to zoom; click a point for details." },
+    {
+      target: ".result-dropdown",
+      content: "Choose which alleles (datasets) to overlay on the graph.",
+    },
+    {
+      target: ".line-graph-container",
+      content: "Drag to zoom; click a point for details.",
+    },
     { target: ".download-icon", content: "Download the graph as an image." },
-    { target: ".settings-icon", content: "Change line thickness, Y range, or scale." },
+    {
+      target: ".settings-icon",
+      content: "Change line thickness, Y range, or scale.",
+    },
     { target: ".search-icon", content: "Filter the CSV table." },
     { target: ".clear-filter-icon", content: "Clear the current filters." },
     { target: ".download-csv-icon", content: "Download the CSV table." },
@@ -477,7 +570,9 @@ export default function Results() {
   return (
     <div>
       <Joyride
-        steps={steps.map((s, i) => (i === 0 ? { ...s, disableBeacon: true } : s))}
+        steps={steps.map((s, i) =>
+          i === 0 ? { ...s, disableBeacon: true } : s
+        )}
         continuous
         showProgress
         showSkipButton
@@ -490,7 +585,11 @@ export default function Results() {
         styles={{ beacon: { display: "none" } }}
         callback={(data) => {
           const { action, index, status, type } = data;
-          if (status === "finished" || status === "skipped" || action === "close") {
+          if (
+            status === "finished" ||
+            status === "skipped" ||
+            action === "close"
+          ) {
             setTourActive(false);
             setStepIndex(0);
           } else if (type === "step:after") {
@@ -518,25 +617,55 @@ export default function Results() {
         </Typography>
 
         <Stack spacing={1} sx={{ mt: 2 }}>
-          <LinearProgress variant="determinate" value={(progress / totalRequests) * 100} />
+          <LinearProgress
+            variant="determinate"
+            value={(progress / totalRequests) * 100}
+          />
           <div style={{ color: "#6c757d", fontSize: "0.875rem" }}>
             {`${Math.round((progress / totalRequests) * 100)}%`}
           </div>
         </Stack>
 
-        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", mb: 4 }}>
-          <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "center", width: "100%" }}>
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            mb: 4,
+          }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "center",
+              width: "100%",
+            }}
+          >
             <Select<number[]>
               multiple
               value={selectedAlleleIndices}
               onChange={handleResultChange}
               sx={{ width: "100%", maxWidth: 400 }}
               className="result-dropdown"
-              MenuProps={{ PaperProps: { style: { maxHeight: 300, width: "auto", whiteSpace: "normal" } } }}
+              MenuProps={{
+                PaperProps: {
+                  style: {
+                    maxHeight: 300,
+                    width: "auto",
+                    whiteSpace: "normal",
+                  },
+                },
+              }}
               renderValue={(selected) => {
                 const sel = selected as number[];
                 const display = sel.slice(0, 2).map((i) => (
-                  <Typography key={i} variant="body2" component="div" sx={{ wordBreak: "break-word" }}>
+                  <Typography
+                    key={i}
+                    variant="body2"
+                    component="div"
+                    sx={{ wordBreak: "break-word" }}
+                  >
                     {i === -1 ? "Select All" : `Allele: ${alleleOptions[i]}`}
                   </Typography>
                 ));
@@ -545,7 +674,10 @@ export default function Results() {
                   <div>
                     {display}
                     {more > 0 && (
-                      <Typography variant="body2" component="div">{`+${more} more`}</Typography>
+                      <Typography
+                        variant="body2"
+                        component="div"
+                      >{`+${more} more`}</Typography>
                     )}
                   </div>
                 );
@@ -557,7 +689,15 @@ export default function Results() {
                 </Typography>
               </MenuItem>
               {alleleOptions.map((a, i) => (
-                <MenuItem key={a} value={i} style={{ whiteSpace: "normal", wordBreak: "break-all", maxWidth: 400 }}>
+                <MenuItem
+                  key={a}
+                  value={i}
+                  style={{
+                    whiteSpace: "normal",
+                    wordBreak: "break-all",
+                    maxWidth: 400,
+                  }}
+                >
                   <Typography variant="body2" component="div">
                     Allele: {a}
                   </Typography>
@@ -566,15 +706,36 @@ export default function Results() {
             </Select>
           </Box>
 
-          <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "center", width: "100%", mt: 4 }}>
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "100%",
+              mt: 4,
+            }}
+          >
             {status !== "done" ? (
               <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
                 <CircularProgress size={24} />
-                <Typography variant="body1">Polling IEDB ({status})…</Typography>
+                <Typography variant="body1">
+                  Polling IEDB ({status})…
+                </Typography>
               </Box>
             ) : (
-              <Box sx={{ display: "flex", alignItems: "flex-start" }}>
-                <div ref={chartContainerRef} className="line-graph-container" style={{ width: 900, height: 500 }}>
+              <>
+                {/* Graph */}
+                <Box
+                  ref={chartContainerRef}
+                  className="line-graph-container"
+                  sx={{
+                    width: "90%",
+                    maxWidth: 900,
+                    height: 500,
+                    mb: 3,
+                  }}
+                >
                   <LineGraph
                     dataSets={dataForGraph}
                     width={900}
@@ -585,119 +746,260 @@ export default function Results() {
                     colors={generateColors(Math.max(1, dataForGraph.length))}
                     chartContainerRef={chartContainerRef}
                   />
-                </div>
-                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", ml: 2 }}>
-                  {/* Save is a no-op in desktop for now, but keep the UI parity */}
-                  <IconButton color="primary" disabled={loadingSave} className="bookmark-icon">
-                    {loadingSave ? <CircularProgress size={24} /> : <BookmarkIcon />}
+                </Box>
+
+                {/* Responsive, wrapping legend below graph */}
+                {dataForGraph.length > 0 && (
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      justifyContent: "center",
+                      gap: 1.5,
+                      backgroundColor: "#fff",
+                      borderRadius: 2,
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
+                      p: 2,
+                      mb: 4,
+                      width: "90%",
+                      maxWidth: 900,
+                      opacity: dataForGraph.length > 0 ? 1 : 0,
+                      transition: "opacity 0.3s ease-in-out",
+                    }}
+                  >
+                    {dataForGraph.map((alleleSet, idx) => (
+                      <Box
+                        key={idx}
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          px: 1,
+                          py: 0.5,
+                          borderRadius: 1,
+                          border: "1px solid #e0e0e0",
+                          backgroundColor: "#fff",
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            width: 14,
+                            height: 14,
+                            borderRadius: "50%",
+                            backgroundColor: alleleSet[0]?.color || "#555",
+                            mr: 1,
+                          }}
+                        />
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                color: "text.primary",
+                                fontWeight: 500,
+                              }}
+                            >
+                              {alleleSet[0]?.allele || `Set ${idx + 1}`}
+                            </Typography>
+                          </Box>
+                        ))}
+                  </Box>
+                )}
+
+                {/* Buttons aligned under legend */}
+                <Box sx={{ display: "flex", gap: 1, mb: 2 }}>
+                  <IconButton
+                    color="primary"
+                    disabled={loadingSave}
+                    className="bookmark-icon"
+                  >
+                    {loadingSave ? (
+                      <CircularProgress size={24} />
+                    ) : (
+                      <BookmarkIcon />
+                    )}
                   </IconButton>
-                  <Box sx={{ height: 8 }} />
-                  <IconButton color="primary" onClick={handleDownload} className="download-icon">
+                  <IconButton
+                    color="primary"
+                    onClick={handleDownload}
+                    className="download-icon"
+                  >
                     <DownloadIcon />
                   </IconButton>
-                  <Box sx={{ height: 8 }} />
-                  <IconButton color="primary" onClick={handleOpenSettings} className="settings-icon">
+                  <IconButton
+                    color="primary"
+                    onClick={handleOpenSettings}
+                    className="settings-icon"
+                  >
                     <SettingsIcon />
                   </IconButton>
                 </Box>
-              </Box>
+              </>
             )}
           </Box>
         </Box>
 
-        {/* CSV / table */}
+        {/* CSV Table */}
         <Box
           sx={{
-            padding: 2,
-            border: "1px solid #ddd",
-            borderRadius: 8,
-            backgroundColor: "#f7f7f7",
-            boxShadow: "0px 2px 4px rgba(0,0,0,0.1)",
-            width: 1400,
-            m: "auto",
-            mt: 4,
-            textAlign: "center",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            mt: 2,
+            mb: 2,
           }}
         >
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <IconButton color="primary" onClick={() => setSearchModalOpen(true)} className="search-icon">
-              <SearchIcon />
-            </IconButton>
-            <IconButton
-              color="primary"
-              onClick={() => {
-                setFilteredDataForTable(dataForTable);
-                setSearchQuery("");
-                setSearchType("peptide");
-                setStartRange({ start: null, end: null });
-                setKdStart(null);
-                setKdEnd(null);
+          {/* Table Borders and Padding */}
+          <Paper
+            elevation={3}
+            sx={{
+              width: "100%",
+              borderRadius: 2,
+              border: "2px solid #ddd",
+              backgroundColor: "#ffffff",
+              boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
+              p: 2,
+              opacity: filteredDataForTable.length > 0 ? 1 : 0,
+              transition: "opacity 0.3s ease-in-out",
+            }}
+          >
+            {/* Table Header Row with Search and Download Icons */}
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                mb: 1,
+                px: 1,
               }}
-              className="clear-filter-icon"
             >
-              <CloseIcon />
-            </IconButton>
-            <Typography variant="h6" gutterBottom sx={{ flexGrow: 1, textAlign: "center", m: "0 auto" }}>
-              CSV Data
-            </Typography>
-            <IconButton color="primary" onClick={handleDownloadCSV} sx={{ ml: "auto" }} className="download-csv-icon">
-              <DownloadIcon />
-            </IconButton>
-          </Box>
-
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Data Set</TableCell>
-                  {csvHeaders.filter((h) => h !== "datasetIndex").map((h) => (
-                    <TableCell key={h}>
-                      {h === "kd" ? (
-                        <span>
-                          K<tspan style={{ fontSize: "0.8em", verticalAlign: "sub" }}>d</tspan>
-                        </span>
-                      ) : (
-                        h
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredDataForTable.map((row, i) => (
-                  <TableRow key={i}>
-                    <TableCell>
-                      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <Box
-                          sx={{
-                            width: 20,
-                            height: 20,
-                            backgroundColor: row.color,
-                            display: "inline-block",
-                            mr: 1,
-                          }}
-                        />
-                        {row.datasetIndex}
-                      </Box>
-                    </TableCell>
+               {/* Search and Clear Filter Icons */}
+              <Box 
+              sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <IconButton
+                  color="primary"
+                  onClick={() => setSearchModalOpen(true)}
+                  className="search-icon"
+                >
+                  <SearchIcon />
+                </IconButton>
+                <IconButton
+                  color="primary"
+                  onClick={() => {
+                    setFilteredDataForTable(dataForTable);
+                    setSearchQuery("");
+                    setSearchType("peptide");
+                    setStartRange({ start: null, end: null });
+                    setKdStart(null);
+                    setKdEnd(null);
+                  }}
+                  className="clear-filter-icon"
+                >
+                  <CloseIcon />
+                </IconButton>
+              </Box>
+              {/* Title Text */}
+              <Typography
+                variant="h6"
+                gutterBottom
+                sx={{ flexGrow: 1, textAlign: "center", fontWeight: 600 }}
+              >
+                CSV Data
+              </Typography>
+              
+              <IconButton
+                color="primary"
+                onClick={handleDownloadCSV}
+                className="download-csv-icon"
+              >
+                <DownloadIcon />
+              </IconButton>
+            </Box>
+              {/* Actual Data Table */}
+            <TableContainer component={Paper} 
+            sx={{ 
+              borderRadius: 2, 
+              maxHeight: 600 
+              }}
+            >
+              <Table stickyHeader>
+                {/* Table Column Headers */}
+                <TableHead>
+                  <TableRow sx={{ backgroundColor: "#f4f4f4" }}>
+                    <TableCell sx={{ fontWeight: 600 }}>Data Set</TableCell>
                     {csvHeaders
-                      .filter((h) => h !== "sequence_text" && h !== "datasetIndex")
+                      .filter((h) => h !== "datasetIndex")
                       .map((h) => (
-                        <TableCell key={h}>{String(row[h])}</TableCell>
+                        <TableCell
+                          key={h}
+                          sx={{ fontWeight: 600, textTransform: "capitalize" }}
+                        >
+                          {h === "kd" ? (
+                            <span>
+                              K<sub>d</sub>
+                            </span>
+                          ) : (
+                            h
+                          )}
+                        </TableCell>
                       ))}
-                    <TableCell>
-                      <Typography sx={{ wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
-                        {String(row.sequence_text || "")}
-                      </Typography>
-                    </TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                </TableHead>
+                {/* Table Body Rows */}
+                <TableBody>
+                  {filteredDataForTable.map((row, i) => (
+                    <TableRow
+                      key={i}
+                      sx={{
+                        "&:nth-of-type(odd)": { backgroundColor: "#fafafa" },
+                        "&:hover": { backgroundColor: "#f1f1f1" },
+                      }}
+                    >
+                      {/* First Column with Data Set Index and Color Dot */}
+                      <TableCell>
+                        <Box sx={{ display: "flex", alignItems: "center" }}>
+                          <Box
+                            sx={{
+                              width: 14,
+                              height: 14,
+                              borderRadius: "50%",
+                              backgroundColor: row.color,
+                              mr: 1,
+                            }}
+                          />
+                          {row.datasetIndex}
+                        </Box>
+                      </TableCell>
+                      {/* Other Columns */}
+                      {csvHeaders
+                        .filter(
+                          (h) => h !== "sequence_text" && h !== "datasetIndex"
+                        )
+                        .map((h) => (
+                          <TableCell key={h}>
+                            {typeof row[h] === "number"
+                              ? row[h].toFixed(3)
+                              : String(row[h])}
+                          </TableCell>
+                        ))}
+                      <TableCell>
+                        <Typography
+                          sx={{
+                            wordBreak: "break-word",
+                            whiteSpace: "pre-wrap",
+                            fontFamily: "monospace",
+                            fontSize: "0.85rem",
+                          }}
+                        >
+                          {String(row.sequence_text || "")}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
         </Box>
       </Box>
-
       {/* Error modal */}
       <Modal open={!!errorMessage} onClose={handleCloseError}>
         <Box
@@ -713,13 +1015,22 @@ export default function Results() {
             p: 4,
           }}
         >
-          <IconButton aria-label="close" onClick={handleCloseError} sx={{ position: "absolute", right: 8, top: 8 }}>
+          <IconButton
+            aria-label="close"
+            onClick={handleCloseError}
+            sx={{ position: "absolute", right: 8, top: 8 }}
+          >
             <CloseIcon />
           </IconButton>
-          <Typography component="h2" sx={{ fontSize: "2rem", fontWeight: "bold", mb: 2 }}>
+          <Typography
+            component="h2"
+            sx={{ fontSize: "2rem", fontWeight: "bold", mb: 2 }}
+          >
             Unexpected Error
           </Typography>
-          <Typography sx={{ mt: 2, color: "#f44336" }}>{errorMessage}</Typography>
+          <Typography sx={{ mt: 2, color: "#f44336" }}>
+            {errorMessage}
+          </Typography>
         </Box>
       </Modal>
 
@@ -738,28 +1049,52 @@ export default function Results() {
             p: 4,
           }}
         >
-          <Typography variant="h6" component="h2">
+          <Typography variant="h2" component="h2">
             Settings
           </Typography>
           <Box mt={2}>
             <Typography variant="body2">Line Thickness</Typography>
-            <Slider value={lineThickness} onChange={handleLineThicknessChange as any} step={1} marks min={1} max={5} />
+            <Slider
+              value={lineThickness}
+              onChange={handleLineThicknessChange as any}
+              step={1}
+              marks
+              min={1}
+              max={5}
+            />
             <FormControl component="fieldset" sx={{ mt: 2 }}>
               <FormLabel component="legend">
-                Y Axis Range (lower bound for {scaleType === "log" ? "log" : "linear"})
+                Y Axis Range (lower bound for{" "}
+                {scaleType === "log" ? "log" : "linear"})
               </FormLabel>
               <RadioGroup value={yAxisRange} onChange={handleYAxisRangeChange}>
                 <FormControlLabel value={500} control={<Radio />} label="500" />
-                <FormControlLabel value={5000} control={<Radio />} label="5000" />
-                <FormControlLabel value={20000} control={<Radio />} label="20000" />
+                <FormControlLabel
+                  value={5000}
+                  control={<Radio />}
+                  label="5000"
+                />
+                <FormControlLabel
+                  value={20000}
+                  control={<Radio />}
+                  label="20000"
+                />
               </RadioGroup>
             </FormControl>
             <Typography variant="body2" sx={{ mt: 2 }}>
               Scale Type
             </Typography>
             <RadioGroup value={scaleType} onChange={handleScaleTypeChange}>
-              <FormControlLabel value="linear" control={<Radio />} label="Linear" />
-              <FormControlLabel value="log" control={<Radio />} label="Logarithmic" />
+              <FormControlLabel
+                value="linear"
+                control={<Radio />}
+                label="Linear"
+              />
+              <FormControlLabel
+                value="log"
+                control={<Radio />}
+                label="Logarithmic"
+              />
             </RadioGroup>
           </Box>
           <Button onClick={handleCloseSettings} sx={{ mt: 2 }}>
@@ -797,12 +1132,31 @@ export default function Results() {
           </Typography>
           <FormControl component="fieldset" sx={{ mt: 2 }}>
             <FormLabel component="legend">Search Type</FormLabel>
-            <RadioGroup value={searchType} onChange={(e) => setSearchType(e.target.value as "peptide" | "core_peptide")}>
-              <FormControlLabel value="peptide" control={<Radio />} label="Peptide" />
-              <FormControlLabel value="core_peptide" control={<Radio />} label="Core Peptide" />
+            <RadioGroup
+              value={searchType}
+              onChange={(e) =>
+                setSearchType(e.target.value as "peptide" | "core_peptide")
+              }
+            >
+              <FormControlLabel
+                value="peptide"
+                control={<Radio />}
+                label="Peptide"
+              />
+              <FormControlLabel
+                value="core_peptide"
+                control={<Radio />}
+                label="Core Peptide"
+              />
             </RadioGroup>
           </FormControl>
-          <TextField label="Search" variant="outlined" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} sx={{ width: "100%", mt: 2 }} />
+          <TextField
+            label="Search"
+            variant="outlined"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            sx={{ width: "100%", mt: 2 }}
+          />
           <Box sx={{ mt: 2 }}>
             <FormLabel component="legend">Peptide Position</FormLabel>
           </Box>
@@ -836,10 +1190,30 @@ export default function Results() {
             </FormLabel>
           </Box>
           <Box sx={{ display: "flex", gap: 2 }}>
-            <TextField label="Minimum" variant="outlined" value={kdStart ?? ""} onChange={(e) => setKdStart(e.target.value)} error={kdStartError} sx={{ width: "100%" }} />
-            <TextField label="Maximum" variant="outlined" value={kdEnd ?? ""} onChange={(e) => setKdEnd(e.target.value)} error={kdEndError} sx={{ width: "100%" }} />
+            <TextField
+              label="Minimum"
+              variant="outlined"
+              value={kdStart ?? ""}
+              onChange={(e) => setKdStart(e.target.value)}
+              error={kdStartError}
+              sx={{ width: "100%" }}
+            />
+            <TextField
+              label="Maximum"
+              variant="outlined"
+              value={kdEnd ?? ""}
+              onChange={(e) => setKdEnd(e.target.value)}
+              error={kdEndError}
+              sx={{ width: "100%" }}
+            />
           </Box>
-          <Button variant="contained" color="primary" onClick={applyFilter} sx={{ mt: 2 }} disabled={startError || endError || kdStartError || kdEndError}>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={applyFilter}
+            sx={{ mt: 2 }}
+            disabled={startError || endError || kdStartError || kdEndError}
+          >
             Apply Filter
           </Button>
         </Box>

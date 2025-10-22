@@ -289,30 +289,6 @@ const LineGraph: React.FC<LineGraphProps> = ({ dataSets, width, height, lineThic
                 <ReferenceArea x1={refAreaLeft} x2={refAreaRight} strokeOpacity={0.3} />
               ) : null}
             </LineChart>
-            <div className="legend-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <h4>Legend</h4>
-              <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '20px', maxWidth: '100%', padding: '0 20px' }}>
-                {legendData
-                  .filter(item => item.allele && item.length)
-                  .sort((a, b) => a.index - b.index)
-                  .map((item, index) => (
-                    <div key={index} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', width: '200px', padding: '10px' }}>
-                      <div
-                        style={{
-                          width: '20px',
-                          height: '20px',
-                          backgroundColor: item.color,
-                          marginRight: '10px',
-                          flexShrink: 0,
-                        }}
-                      ></div>
-                      <span style={{ flexGrow: 1 }}>
-                        {item.index} - {item.allele} (Length: {item.length})
-                      </span>
-                    </div>
-                  ))}
-              </div>
-            </div>
           </div>
         </ResponsiveContainer>
       </div>
