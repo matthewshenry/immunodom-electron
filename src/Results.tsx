@@ -129,12 +129,18 @@ export default function Results() {
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
 
   const [alleleOptions, setAlleleOptions] = useState<string[]>([]);
-  const [selectedAlleleIndices, setSelectedAlleleIndices] = useState<number[]>([]);
+  const [selectedAlleleIndices, setSelectedAlleleIndices] = useState<number[]>(
+    []
+  );
 
   const [searchModalOpen, setSearchModalOpen] = useState(false);
-  const [searchType, setSearchType] = useState<"peptide" | "core_peptide">("peptide");
+  const [searchType, setSearchType] = useState<"peptide" | "core_peptide">(
+    "peptide"
+  );
   const [searchQuery, setSearchQuery] = useState("");
-  const [startRange, setStartRange] = useState<{ start: any; end: any | null }>({ start: null, end: null });
+  const [startRange, setStartRange] = useState<{ start: any; end: any | null }>(
+    { start: null, end: null }
+  );
   const [kdStart, setKdStart] = useState<string | null>(null);
   const [kdEnd, setKdEnd] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -159,13 +165,20 @@ export default function Results() {
 
     const poll = async () => {
       try {
-        const { ok, status: http, statusText, data } = await bridgeFetch<ResultsResponse>(pollUrl, {
+        const {
+          ok,
+          status: http,
+          statusText,
+          data,
+        } = await bridgeFetch<ResultsResponse>(pollUrl, {
           method: "GET",
           headers: { Accept: "application/json" },
         });
         if (!ok) throw new Error(`Polling failed (${http}): ${statusText}`);
 
-        const s = (data?.status as ResultsResponse["status"]) || (data?.data?.results ? "done" : "pending");
+        const s =
+          (data?.status as ResultsResponse["status"]) ||
+          (data?.data?.results ? "done" : "pending");
         if (!cancelled) setStatus(s);
 
         if (s === "done") {
