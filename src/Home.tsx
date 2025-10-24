@@ -1,105 +1,139 @@
-import * as React from 'react';
-import Joyride, { Step }  from 'react-joyride';
-import Button from '@mui/joy/Button';
-import Stack from '@mui/joy/Stack';
-import Box from '@mui/joy/Box';
-import { Typography } from '@mui/joy';
-import { MenuItem, Select, SelectChangeEvent, TextareaAutosize, CircularProgress, Modal, IconButton, Autocomplete, TextField } from '@mui/material';
-import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import CloseIcon from '@mui/icons-material/Close';
-import HelpIcon from '@mui/icons-material/Help';
-import Tooltip from '@mui/material/Tooltip';
-import { API_URL } from './constants';
+import * as React from "react";
+import Joyride, { Step } from "react-joyride";
+import Button from "@mui/joy/Button";
+import Stack from "@mui/joy/Stack";
+import Box from "@mui/joy/Box";
+import { Typography } from "@mui/joy";
+import {
+  MenuItem,
+  Select,
+  SelectChangeEvent,
+  TextareaAutosize,
+  CircularProgress,
+  Modal,
+  IconButton,
+  Autocomplete,
+  TextField,
+} from "@mui/material";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import CloseIcon from "@mui/icons-material/Close";
+import HelpIcon from "@mui/icons-material/Help";
+import Tooltip from "@mui/material/Tooltip";
+import { API_URL } from "./constants";
 import { bridgeFetch } from "./api";
 
-function alleleJsonFilename(type:string, uiMethod:string):string{
+function alleleJsonFilename(type: string, uiMethod: string): string {
   const safe = uiMethod.replace(/\s+/g, "_");
   return `${safe}_${type}.json`;
 }
 
-const alleleJsonModules = import.meta.glob<Record<string,string[]>>(
+const alleleJsonModules = import.meta.glob<Record<string, string[]>>(
   "./alleles/*.json",
   { eager: true, import: "default" }
 );
 
-  const CenteredGridRow = ({ children }: { children: React.ReactNode }) => (
-    <Box display="flex" justifyContent="center" flexWrap="wrap">
-      {children}
+const CenteredGridRow = ({ children }: { children: React.ReactNode }) => (
+  <Box display="flex" justifyContent="center" flexWrap="wrap">
+    {children}
+  </Box>
+);
+
+interface DigitButtonProps {
+  digit: number;
+  selectedDigits: number[];
+  setSelectedDigits: (digits: number[]) => void;
+}
+
+const DigitButton: React.FC<DigitButtonProps> = ({
+  digit,
+  selectedDigits,
+  setSelectedDigits,
+}) => {
+  const isSelected = selectedDigits.includes(digit);
+
+  const handleClick = () => {
+    if (isSelected) {
+      setSelectedDigits(selectedDigits.filter((d) => d !== digit));
+    } else {
+      setSelectedDigits([...selectedDigits, digit]);
+    }
+  };
+  return (
+    <Box
+      onClick={handleClick}
+      style={{
+        backgroundColor: isSelected ? "#CCCCCC" : "#fff", // Change background color based on selection
+        padding: 10,
+        margin: 5,
+        cursor: "pointer",
+      }}
+    >
+      {digit}
     </Box>
   );
-
-  
-  interface DigitButtonProps {
-    digit: number;
-    selectedDigits: number[];
-    setSelectedDigits: (digits: number[]) => void;
-  }
-  
-  const DigitButton: React.FC<DigitButtonProps> = ({ digit, selectedDigits, setSelectedDigits }) => {
-    const isSelected = selectedDigits.includes(digit);
-  
-    const handleClick = () => {
-      if (isSelected) {
-        setSelectedDigits(selectedDigits.filter((d) => d !== digit));
-      } else {
-        setSelectedDigits([...selectedDigits, digit]);
-      }
-    };
-    return (
-      <Box
-        onClick={handleClick}
-        style={{
-          backgroundColor: isSelected ? '#CCCCCC' : '#fff', // Change background color based on selection
-          padding: 10,
-          margin: 5,
-          cursor: 'pointer',
-        }}
-      >
-        {digit}
-      </Box>
-    );
-  };
+};
 
 export default function Home() {
   const { type } = useParams<{ type: string }>();
-  const [speciesLocusToMhcAlleles, setSpeciesLocusToMhcAlleles] = useState<{ [key: string]: string[] }>({});
-  const [selectedSpeciesLocus, setSelectedSpeciesLocus] = useState<string[]>([]);
+  const [speciesLocusToMhcAlleles, setSpeciesLocusToMhcAlleles] = useState<{
+    [key: string]: string[];
+  }>({});
+  const [selectedSpeciesLocus, setSelectedSpeciesLocus] = useState<string[]>(
+    []
+  );
   const [mhcAlleles, setMhcAlleles] = useState<string[]>([]);
   const [selectedMhcAlleles, setSelectedMhcAlleles] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [formLoading, setFormLoading] = useState(false); 
-  const [selectedMethod, setSelectedMethod] = useState('');
+  const [formLoading, setFormLoading] = useState(false);
+  const [selectedMethod, setSelectedMethod] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isAlive, setIsAlive] = useState<boolean | null>(null);
   const [tourActive, setTourActive] = useState(false);
   const [stepIndex, setStepIndex] = useState(1);
 
   const mhciiMethods = [
-    { value: "netmhciipan_el", label: "NetMHCIIpan 4.1 EL (Recommended Epitope Predictor)" },
-    { value: "netmhciipan_ba", label: "NetMHCIIpan 4.1 BA (Recommended Binding Predictor)" },
+    {
+      value: "netmhciipan_el",
+      label: "NetMHCIIpan 4.1 EL (Recommended Epitope Predictor)",
+    },
+    {
+      value: "netmhciipan_ba",
+      label: "NetMHCIIpan 4.1 BA (Recommended Binding Predictor)",
+    },
     { value: "recommended", label: "IEDB Recommended Predictor" },
     { value: "Consensus", label: "Consensus 2.22" },
     { value: "NN_align", label: "NN_align 2.3 (NetMHCII 2.3)" },
     { value: "smm_align", label: "SMM_align (NetMHCII 1.1)" },
-    { value: "comblib", label: "Combinatorial library" }
+    { value: "comblib", label: "Combinatorial library" },
   ];
 
   const mhciMethods = [
-    { value: "netmhcpan_el-4.1", label: "NetMHCpan 4.1 EL (Recommended Epitope Predictor)" },
-    { value: "netmhcpan_ba-4.1", label: "NetMHCpan 4.1 BA (Recommended Binding Predictor)" },
+    {
+      value: "netmhcpan_el-4.1",
+      label: "NetMHCpan 4.1 EL (Recommended Epitope Predictor)",
+    },
+    {
+      value: "netmhcpan_ba-4.1",
+      label: "NetMHCpan 4.1 BA (Recommended Binding Predictor)",
+    },
     { value: "recommended", label: "IEDB Recommended Predictor" },
     { value: "ann", label: "Artificial Neural Network (ANN)" },
     { value: "smmpmbec", label: "SMM-PMBEC" },
     { value: "smm", label: "SMM" },
-    { value: "comblib_sidney2008", label: "Combinatorial Library (Sidney 2008)" },
+    {
+      value: "comblib_sidney2008",
+      label: "Combinatorial Library (Sidney 2008)",
+    },
     { value: "netmhccons", label: "NetMHCcons" },
-    { value: "pickpocket", label: "PickPocket" }
+    { value: "pickpocket", label: "PickPocket" },
   ];
 
   // Utilize alleleJsonModules to get human coverage alleles
-  const mhciiCoverageData = alleleJsonModules["./alleles/human_coverage_mhcii.json"];
-  const mhciCoverageData = alleleJsonModules["./alleles/human_coverage_mhci.json"];
+  const mhciiCoverageData =
+    alleleJsonModules["./alleles/human_coverage_mhcii.json"];
+  const mhciCoverageData =
+    alleleJsonModules["./alleles/human_coverage_mhci.json"];
 
   // Extract coverage panels safely
   const humanCoverageMhciiAlleles =
@@ -113,7 +147,7 @@ export default function Home() {
       : [];
 
   // Local UI states for toggle tracking
-  const [isCoverageSelected, setIsCoverageSelected] = useState(false);   // For MHC-II
+  const [isCoverageSelected, setIsCoverageSelected] = useState(false); // For MHC-II
   const [isMhciCoverageSelected, setIsMhciCoverageSelected] = useState(false); // For MHC-I
 
   const handleMethodChange = (event: SelectChangeEvent<string>) => {
@@ -129,7 +163,7 @@ export default function Home() {
 
     const loadAlleleBucketsFromLocalJson = async () => {
       try {
-        if(!type) return;
+        if (!type) return;
         setLoading(true);
 
         // Use current UI method, or fallback default per type
@@ -144,9 +178,11 @@ export default function Home() {
         // Pull the pre-bundled JSON from the glob map
         const data = alleleJsonModules[mapKey];
 
-        if(!data){
+        if (!data) {
           // Helpful error that lists what we actually have in /src/alleles
-          const available = Object.keys(alleleJsonModules).sort().join("\n  - ");
+          const available = Object.keys(alleleJsonModules)
+            .sort()
+            .join("\n  - ");
           throw new Error(
             `Missing allele JSON: ${mapKey}\nMake sure this file exists in src/alleles/.\nAvailable files:\n  - ${available}`
           );
@@ -163,9 +199,11 @@ export default function Home() {
 
         setSelectedSpeciesLocus([firstNonEmpty]);
         setMhcAlleles(data[firstNonEmpty] || []);
-      } catch(err:any){
+      } catch (err: any) {
         setErrorMessage(
-          `Failed to load local allele definitions for ${type}/${selectedMethod || "(default)"} — ${err?.message || err}`
+          `Failed to load local allele definitions for ${type}/${
+            selectedMethod || "(default)"
+          } — ${err?.message || err}`
         );
         console.error(err);
       } finally {
@@ -176,20 +214,20 @@ export default function Home() {
     loadAlleleBucketsFromLocalJson();
   }, [type, selectedMethod]); // IMPORTANT: re-run when method changes
 
-
-
   const navigate = useNavigate();
 
   const handleSpeciesLocusChange = (event: SelectChangeEvent<string[]>) => {
     const selectedValues = event.target.value as string[];
     setSelectedSpeciesLocus(selectedValues);
-    const newMhcAlleles = selectedValues.flatMap(speciesLocus => speciesLocusToMhcAlleles[speciesLocus] || []);
+    const newMhcAlleles = selectedValues.flatMap(
+      (speciesLocus) => speciesLocusToMhcAlleles[speciesLocus] || []
+    );
     setMhcAlleles(newMhcAlleles);
     setSelectedMhcAlleles([]);
   };
-  
+
   const [selectedDigits, setSelectedDigits] = useState([]);
-  
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormLoading(true);
@@ -225,8 +263,11 @@ export default function Home() {
         }
       };
 
-      const toolGroup = (type === "mhcii") ? "mhcii" : "mhci";
-      const ngMethod = mapMethod(toolGroup, (formJson.predictionMethod || "").toString());
+      const toolGroup = type === "mhcii" ? "mhcii" : "mhci";
+      const ngMethod = mapMethod(
+        toolGroup,
+        (formJson.predictionMethod || "").toString()
+      );
       if (!ngMethod) {
         throw new Error(
           `The selected method "${formJson.predictionMethod}" isn’t available in the Next-Gen API. Choose a NetMHCpan (MHCI) or NetMHCIIpan (MHCII) method.`
@@ -245,8 +286,8 @@ export default function Home() {
       if (!Array.isArray(selectedDigits) || selectedDigits.length === 0) {
         throw new Error("Please select at least one peptide length.");
       }
-      const minLen = Math.min(...selectedDigits as number[]);
-      const maxLen = Math.max(...selectedDigits as number[]);
+      const minLen = Math.min(...(selectedDigits as number[]));
+      const maxLen = Math.max(...(selectedDigits as number[]));
 
       // 5) Build input_sequence_text (FASTA headers optional; plain lines are fine)
       //    https://nextgen-tools.iedb.org/docs/api/endpoints/api_references.html
@@ -278,21 +319,38 @@ export default function Home() {
       console.log("Submitting to IEDB pipeline:", {
         url: `${API_URL}/pipeline`,
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
         body: pipelineBody,
       });
-      const { ok, status, statusText, data } = await bridgeFetch<any>(`${API_URL}/pipeline`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(pipelineBody),
-      });
-      if (!ok) throw new Error(`Pipeline request failed (${status}): ${statusText}`);
+      const { ok, status, statusText, data } = await bridgeFetch<any>(
+        `${API_URL}/pipeline`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify(pipelineBody),
+        }
+      );
+      if (!ok)
+        throw new Error(`Pipeline request failed (${status}): ${statusText}`);
 
       if (!data?.results_uri && !data?.result_id) {
-        throw new Error("Pipeline submitted but no results handle was returned.");
+        throw new Error(
+          "Pipeline submitted but no results handle was returned."
+        );
       }
-      navigate("/results", { state: { type, result_id: data.result_id, results_uri: data.results_uri } });
-
+      navigate("/results", {
+        state: {
+          type,
+          result_id: data.result_id,
+          results_uri: data.results_uri,
+        },
+      });
     } catch (e: any) {
       setErrorMessage(e.message || "Unexpected error during submission.");
       setIsAlive(false); // legacy, may need fix
@@ -307,29 +365,33 @@ export default function Home() {
 
   const steps: Step[] = [
     {
-      target: '.protein-sequence-container',
-      content: 'Enter protein sequence(s) here, one per line.',
+      target: ".protein-sequence-container",
+      content: "Enter protein sequence(s) here, one per line.",
     },
     {
-      target: '.prediction-method-container',
-      content: 'Select the prediction method you would like to use. This will impact the species/locus and MHC alleles available to you.',
+      target: ".prediction-method-container",
+      content:
+        "Select the prediction method you would like to use. This will impact the species/locus and MHC alleles available to you.",
     },
     {
-      target: '.species-locus-container',
-      content: 'Select the species/locus you would like to use. This will impact the MHC alleles available to you.',
+      target: ".species-locus-container",
+      content:
+        "Select the species/locus you would like to use. This will impact the MHC alleles available to you.",
     },
     {
-      target: '.mhc-alleles-container',
-      content: 'Select the MHC alleles you would like to use. Begin typing to filter the list or scroll. You can select multiple alleles. Click on an allele to remove, or click the "x" to clear all.',
+      target: ".mhc-alleles-container",
+      content:
+        'Select the MHC alleles you would like to use. Begin typing to filter the list or scroll. You can select multiple alleles. Click on an allele to remove, or click the "x" to clear all.',
     },
     {
-      target: '.length-container',
-      content: 'Select the length(s) you would like to use. You can select multiple lengths. Click on a length to remove.',
+      target: ".length-container",
+      content:
+        "Select the length(s) you would like to use. You can select multiple lengths. Click on a length to remove.",
     },
     {
       target: '[type="submit"]',
-      content: 'Click here to submit your request.',
-    }
+      content: "Click here to submit your request.",
+    },
   ];
 
   return (
@@ -495,7 +557,8 @@ export default function Home() {
                               textAlign: "center",
                             }}
                           >
-                            (Human Coverage Panel Available when Human is Selected)
+                            (Human Coverage Panel Available when Human is
+                            Selected)
                           </Typography>
                         )}
 
@@ -518,17 +581,6 @@ export default function Home() {
                               }
                               arrow
                               placement="top"
-                              slotProps={{
-                                tooltip: {
-                                  sx: {
-                                    backgroundColor: "#2f2f2f",
-                                    borderRadius: "8px",
-                                    p: 1.5,
-                                    boxShadow: "0px 3px 8px rgba(0,0,0,0.3)",
-                                  },
-                                },
-                                arrow: { sx: { color: "#2f2f2f" } },
-                              }}
                             >
                               <Button
                                 variant="soft"
