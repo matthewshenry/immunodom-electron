@@ -143,6 +143,9 @@ export default function Results() {
   const [selectedAlleleIndices, setSelectedAlleleIndices] = useState<number[]>(
     []
   );
+  const submitTs = (location.state?.submit_ts as number) || null;
+  const [elapsedSec, setElapsedSec] = useState<number>(0);
+  const hasLoggedFinal = useRef(false);
 
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [searchType, setSearchType] = useState<"peptide" | "core_peptide">(
@@ -163,6 +166,7 @@ export default function Results() {
 
   // Poll new gen IEDB tools until done
   useEffect(() => {
+
     let cancelled = false;
     let t: ReturnType<typeof setTimeout> | null = null;
 
@@ -209,6 +213,9 @@ export default function Results() {
             setPeptideTable(pt);
             setProgress(1);
           }
+          const pollEndTime = performance.now();
+          const elapsed = ((pollEndTime - pollStartTime) / 1000).toFixed(2);
+          console.log(`[Timing] Polling completed in ${elapsed}s at ${new Date().toISOString()}`);
           return;
         }
 
@@ -221,7 +228,9 @@ export default function Results() {
           setErrorMessage(e.message || "Error while polling results.");
       }
     };
-
+    //track the overall poll duration
+    const pollStartTime = performance.now();
+    //console.log(`[Timing] Polling started at ${new Date().toISOString()}`);
     poll();
     return () => {
       cancelled = true;
@@ -347,6 +356,37 @@ export default function Results() {
       setCsvHeaders(["datasetIndex", ...headers]);
     }
   }, [peptideTable]);
+
+  useEffect(() => {
+    if (!submitTs) return;
+    let raf: number;
+    let running = true;
+
+    const tick = () => {
+      if (!running) return;
+      setElapsedSec(((Date.now() - submitTs) / 1000));
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+
+    return () => {
+      running = false;
+      cancelAnimationFrame(raf);
+    };
+  }, [submitTs]);
+
+  useEffect(() => {
+  if (!submitTs) return;
+  if (hasLoggedFinal.current) return;
+
+  const graphReady = status === "done" && dataForGraph.length > 0;
+  if (graphReady) {
+    const totalSec = ((Date.now() - submitTs) / 1000).toFixed(2);
+    hasLoggedFinal.current = true;
+    console.log(`[Timing] Submit→Graph loaded in ${totalSec}s`);
+  }
+}, [submitTs, status, dataForGraph]);
+
 
   // controls
   const handleResultChange = (event: SelectChangeEvent<number[]>) => {

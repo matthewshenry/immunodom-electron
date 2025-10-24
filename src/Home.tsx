@@ -325,6 +325,10 @@ export default function Home() {
         },
         body: pipelineBody,
       });
+      // start timing the API response
+      const submissionStart = performance.now();
+      console.log(`[Timing] Submitting pipeline to IEDB at ${new Date().toISOString()}`);
+
       const { ok, status, statusText, data } = await bridgeFetch<any>(
         `${API_URL}/pipeline`,
         {
@@ -336,6 +340,13 @@ export default function Home() {
           body: JSON.stringify(pipelineBody),
         }
       );
+      const submissionEnd = performance.now();
+      console.log(
+        `[Timing] IEDB pipeline submission response received after ${(
+          (submissionEnd - submissionStart) /
+          1000
+        ).toFixed(2)}s`
+);
       if (!ok)
         throw new Error(`Pipeline request failed (${status}): ${statusText}`);
 
@@ -344,11 +355,13 @@ export default function Home() {
           "Pipeline submitted but no results handle was returned."
         );
       }
+      const submitTs = Date.now();
       navigate("/results", {
         state: {
           type,
           result_id: data.result_id,
           results_uri: data.results_uri,
+          submit_ts: submitTs,
         },
       });
     } catch (e: any) {
