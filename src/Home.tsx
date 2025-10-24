@@ -156,7 +156,7 @@ export default function Home() {
 
   useEffect(() => {
     // Reset UI whenever the page type or method changes
-    setSelectedSpeciesLocus([]);
+    //setSelectedSpeciesLocus([]); commented out for now
     setMhcAlleles([]);
     setSelectedMhcAlleles([]);
     setErrorMessage(null);
@@ -191,14 +191,19 @@ export default function Home() {
         // data is already the bucketed form {human:[...], cow:[...], ...}
         setSpeciesLocusToMhcAlleles(data);
 
-        // Pick a default species/locus that has entries
-        const firstNonEmpty =
-          Object.entries(data).find(([, arr]) => (arr?.length || 0) > 0)?.[0] ||
-          Object.keys(data)[0] ||
+        // default to human
+        const keys = Object.keys(data);
+        const humanKey = keys.find((k) => k.toLowerCase().includes("human"));
+        const hasEntries = (k: string) => (data[k]?.length || 0) > 0;
+
+        const defaultKey =
+          (humanKey && hasEntries(humanKey) && humanKey) ||
+          (Object.entries(data).find(([, arr]) => (arr?.length || 0) > 0)?.[0]) ||
+          keys[0] ||
           "human";
 
-        setSelectedSpeciesLocus([firstNonEmpty]);
-        setMhcAlleles(data[firstNonEmpty] || []);
+        setSelectedSpeciesLocus([defaultKey]);
+        setMhcAlleles(data[defaultKey] || []);
       } catch (err: any) {
         setErrorMessage(
           `Failed to load local allele definitions for ${type}/${
@@ -948,11 +953,6 @@ export default function Home() {
           <Typography sx={{ mt: 2, color: "#f44336" }}>
             {errorMessage}
           </Typography>
-          {isAlive !== null && (
-            <Typography sx={{ mt: 2, color: isAlive ? "green" : "red" }}>
-              {isAlive ? "The app is alive." : "The app is not alive."}
-            </Typography>
-          )}
         </Box>
       </Modal>
       <IconButton
