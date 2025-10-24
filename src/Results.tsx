@@ -325,6 +325,10 @@ export default function Results() {
     setAlleleOptions(alleleList);
     setSelectedAlleleIndices(alleleList.map((_, i) => i)); // default: select all
     setAllGraphData(series);
+    // no filtering yet, set graph data on first load
+    if (dataForGraph.length === 0) {
+      setDataForGraph(series);
+    }
 
     // Table + CSV
     const merged = series.flat().filter((d) => d.kd !== null);
