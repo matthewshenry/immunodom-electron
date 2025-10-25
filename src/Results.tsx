@@ -1,5 +1,11 @@
 // src/Results.tsx
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+} from "react";
 import Joyride, { Step } from "react-joyride";
 import LineGraph from "./LineGraph";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -75,7 +81,7 @@ type DataRowGraph = {
   color: string;
 };
 
-// helpers 
+// helpers
 const generateColors = (n: number) =>
   Array.from(
     { length: n },
@@ -108,7 +114,8 @@ export default function Results() {
   const runType = location.state?.type || "mhci";
   const resultId = location.state?.result_id;
   const resultsUri = location.state?.results_uri;
-  const pollUrl = resultsUri || (resultId ? `${API_URL}/results/${resultId}` : "");
+  const pollUrl =
+    resultsUri || (resultId ? `${API_URL}/results/${resultId}` : "");
 
   // refs for downloads
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -166,7 +173,6 @@ export default function Results() {
 
   // Poll new gen IEDB tools until done
   useEffect(() => {
-
     let cancelled = false;
     let t: ReturnType<typeof setTimeout> | null = null;
 
@@ -215,7 +221,9 @@ export default function Results() {
           }
           const pollEndTime = performance.now();
           const elapsed = ((pollEndTime - pollStartTime) / 1000).toFixed(2);
-          console.log(`[Timing] Polling completed in ${elapsed}s at ${new Date().toISOString()}`);
+          console.log(
+            `[Timing] Polling completed in ${elapsed}s at ${new Date().toISOString()}`
+          );
           return;
         }
 
@@ -249,10 +257,14 @@ export default function Results() {
     const idxLength = pickCol(cols, ["length", "peptide_length"]);
     const idxCore = pickCol(cols, ["core_peptide", "core"]);
     const idxPeptide = pickCol(cols, ["peptide"]);
-    const idxIC50  = pickCol(cols, ["ic50","kd","affinity"]);
+    const idxIC50 = pickCol(cols, ["ic50", "kd", "affinity"]);
     const idxScore = pickCol(cols, ["score"]);
     const idxRank = pickCol(cols, ["percentile", "percentile_rank", "rank"]);
-    const idxSeqTxt = pickCol(cols, ["sequence_text", "input_sequence", "input"]);
+    const idxSeqTxt = pickCol(cols, [
+      "sequence_text",
+      "input_sequence",
+      "input",
+    ]);
     const idxMethod = pickCol(cols, ["method", "predictor", "tool"]);
     const idxSeqNum = pickCol(cols, [
       "seq_num",
@@ -364,7 +376,7 @@ export default function Results() {
 
     const tick = () => {
       if (!running) return;
-      setElapsedSec(((Date.now() - submitTs) / 1000));
+      setElapsedSec((Date.now() - submitTs) / 1000);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -376,17 +388,16 @@ export default function Results() {
   }, [submitTs]);
 
   useEffect(() => {
-  if (!submitTs) return;
-  if (hasLoggedFinal.current) return;
+    if (!submitTs) return;
+    if (hasLoggedFinal.current) return;
 
-  const graphReady = status === "done" && dataForGraph.length > 0;
-  if (graphReady) {
-    const totalSec = ((Date.now() - submitTs) / 1000).toFixed(2);
-    hasLoggedFinal.current = true;
-    console.log(`[Timing] Submit→Graph loaded in ${totalSec}s`);
-  }
-}, [submitTs, status, dataForGraph]);
-
+    const graphReady = status === "done" && dataForGraph.length > 0;
+    if (graphReady) {
+      const totalSec = ((Date.now() - submitTs) / 1000).toFixed(2);
+      hasLoggedFinal.current = true;
+      console.log(`[Timing] Submit→Graph loaded in ${totalSec}s`);
+    }
+  }, [submitTs, status, dataForGraph]);
 
   // controls
   const handleResultChange = (event: SelectChangeEvent<number[]>) => {
@@ -420,8 +431,6 @@ export default function Results() {
     );
     setFilteredDataForTable(filteredTable);
   };
-
-
 
   const handleDownload = () => {
     if (!chartContainerRef.current) return;
@@ -540,7 +549,11 @@ export default function Results() {
       hasError = true;
     } else setKdEndError(false);
 
-    if (startRange.end === null || startRange.end === "" || startRange.end === 0) {
+    if (
+      startRange.end === null ||
+      startRange.end === "" ||
+      startRange.end === 0
+    ) {
       endValue = Math.max(...dataForTable.map((row) => row.start));
     }
     if (endValue !== null && endValue < 1) {
@@ -833,17 +846,17 @@ export default function Results() {
                             mr: 1,
                           }}
                         />
-                            <Typography
-                              variant="body2"
-                              sx={{
-                                color: "text.primary",
-                                fontWeight: 500,
-                              }}
-                            >
-                              {alleleSet[0]?.allele || `Set ${idx + 1}`}
-                            </Typography>
-                          </Box>
-                        ))}
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            color: "text.primary",
+                            fontWeight: 500,
+                          }}
+                        >
+                          {alleleSet[0]?.allele || `Set ${idx + 1}`}
+                        </Typography>
+                      </Box>
+                    ))}
                   </Box>
                 )}
 
@@ -915,9 +928,8 @@ export default function Results() {
                 px: 1,
               }}
             >
-               {/* Search and Clear Filter Icons */}
-              <Box 
-              sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              {/* Search and Clear Filter Icons */}
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                 <IconButton
                   color="primary"
                   onClick={() => setSearchModalOpen(true)}
@@ -948,7 +960,7 @@ export default function Results() {
               >
                 CSV Data
               </Typography>
-              
+
               <IconButton
                 color="primary"
                 onClick={handleDownloadCSV}
@@ -957,11 +969,12 @@ export default function Results() {
                 <DownloadIcon />
               </IconButton>
             </Box>
-              {/* Actual Data Table */}
-            <TableContainer component={Paper} 
-            sx={{ 
-              borderRadius: 2, 
-              maxHeight: 600 
+            {/* Actual Data Table */}
+            <TableContainer
+              component={Paper}
+              sx={{
+                borderRadius: 2,
+                maxHeight: 600,
               }}
             >
               <Table stickyHeader>
@@ -973,6 +986,7 @@ export default function Results() {
                       .filter((h) => h !== "datasetIndex")
                       .map((h) => (
                         <TableCell
+                          align="center"
                           key={h}
                           sx={{ fontWeight: 600, textTransform: "capitalize" }}
                         >
@@ -999,7 +1013,13 @@ export default function Results() {
                     >
                       {/* First Column with Data Set Index and Color Dot */}
                       <TableCell>
-                        <Box sx={{ display: "flex", alignItems: "center" }}>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
                           <Box
                             sx={{
                               width: 14,
@@ -1018,7 +1038,14 @@ export default function Results() {
                           (h) => h !== "sequence_text" && h !== "datasetIndex"
                         )
                         .map((h) => (
-                          <TableCell key={h}>
+                          <TableCell
+                            align="center"
+                            key={h}
+                            sx={{
+                              textAlign: "center",
+                              verticalAlign: "middle",
+                            }}
+                          >
                             {typeof row[h] === "number"
                               ? row[h].toFixed(3)
                               : String(row[h])}
