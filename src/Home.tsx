@@ -280,14 +280,20 @@ export default function Home() {
       }
 
       // 3) Alleles: NG Tools expects a comma-separated string (not array)
-      //    https://nextgen-tools.iedb.org/docs/api/endpoints/api_references.html
-      const alleleCsv = (selectedMhcAlleles || []).join(",");
-      if (!alleleCsv) {
+      // https://nextgen-tools.iedb.org/docs/api/endpoints/api_references.html
+      // normalize alleles to "HLA-*" format and capitalization for typed entries
+      const normalizedAlleles = (selectedMhcAlleles || [])
+      .map((a) => a.toUpperCase().trim())
+      .map((a) => (a.startsWith("HLA-") ? a : `HLA-${a}`));
+      
+      if (normalizedAlleles.length === 0) {
         throw new Error("Please select or enter at least one MHC allele.");
       }
+      setSelectedMhcAlleles(normalizedAlleles); // update state with normalized alleles
+      const alleleCsv = normalizedAlleles.join(",");
 
       // 4) Peptide length range: NG Tools uses [min, max] (not a list)
-      //    convert selectedDigits[] to [min, max]
+      // convert selectedDigits[] to [min, max]
       if (!Array.isArray(selectedDigits) || selectedDigits.length === 0) {
         throw new Error("Please select at least one peptide length.");
       }
@@ -295,7 +301,7 @@ export default function Home() {
       const maxLen = Math.max(...(selectedDigits as number[]));
 
       // 5) Build input_sequence_text (FASTA headers optional; plain lines are fine)
-      //    https://nextgen-tools.iedb.org/docs/api/endpoints/api_references.html
+      // https://nextgen-tools.iedb.org/docs/api/endpoints/api_references.html
       const input_sequence_text = proteinSequences.join("\n");
 
       // 6) Construct the pipeline payload per NG IEDB
@@ -333,7 +339,8 @@ export default function Home() {
       // start timing the API response
       const submissionStart = performance.now();
       console.log(`[Timing] Submitting pipeline to IEDB at ${new Date().toISOString()}`);
-
+      console.log("Submitting Alleles", normalizedAlleles);
+      console.log("Submitting Lengths", selectedDigits);
       const { ok, status, statusText, data } = await bridgeFetch<any>(
         `${API_URL}/pipeline`,
         {
