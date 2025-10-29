@@ -233,6 +233,34 @@ export default function Home() {
 
   const [selectedDigits, setSelectedDigits] = useState([]);
 
+  function normalizeAlleles(alleles: string[] = []): string[] {
+  // list of non-human prefixes
+  const knownPrefixes = [
+    /^H-2/,   // Mouse
+    /^BOLA/,  // Cow
+    /^PATR/,  // Chimpanzee
+    /^GOGO/,  // Gorilla
+    /^MAMU/,  // Macaque
+    /^SLA/,   // Pig
+    /^DLA/,   // Dog
+    /^EQCA/,  // Horse
+  ];
+
+  return alleles
+    .filter(Boolean)
+    .map((a) => a.trim().toUpperCase())
+    .map((a) => {
+      // if allele already has HLA prefix
+      if (/^HLA-/.test(a)) return a;
+
+      // if allele matches known non-human prefix
+      if (knownPrefixes.some((re) => re.test(a))) return a;
+
+      // otherwise, add HLA- prefix
+      return `HLA-${a}`;
+    });
+  }
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormLoading(true);
@@ -280,14 +308,16 @@ export default function Home() {
       }
 
       // 3) Alleles: NG Tools expects a comma-separated string (not array)
-      //    https://nextgen-tools.iedb.org/docs/api/endpoints/api_references.html
-      const alleleCsv = (selectedMhcAlleles || []).join(",");
-      if (!alleleCsv) {
+      // https://nextgen-tools.iedb.org/docs/api/endpoints/api_references.html
+      // normalize alleles to "HLA-*" format and capitalization for typed entries
+      const normalizedAlleles = normalizeAlleles(selectedMhcAlleles);
+      if (normalizedAlleles.length === 0) {
         throw new Error("Please select or enter at least one MHC allele.");
       }
+      const alleleCsv = normalizedAlleles.join(",");
 
       // 4) Peptide length range: NG Tools uses [min, max] (not a list)
-      //    convert selectedDigits[] to [min, max]
+      // convert selectedDigits[] to [min, max]
       if (!Array.isArray(selectedDigits) || selectedDigits.length === 0) {
         throw new Error("Please select at least one peptide length.");
       }
@@ -295,7 +325,7 @@ export default function Home() {
       const maxLen = Math.max(...(selectedDigits as number[]));
 
       // 5) Build input_sequence_text (FASTA headers optional; plain lines are fine)
-      //    https://nextgen-tools.iedb.org/docs/api/endpoints/api_references.html
+      // https://nextgen-tools.iedb.org/docs/api/endpoints/api_references.html
       const input_sequence_text = proteinSequences.join("\n");
 
       // 6) Construct the pipeline payload per NG IEDB
@@ -333,7 +363,9 @@ export default function Home() {
       // start timing the API response
       const submissionStart = performance.now();
       console.log(`[Timing] Submitting pipeline to IEDB at ${new Date().toISOString()}`);
-
+      // debug API calls
+      console.log("Submitting Alleles", normalizedAlleles);
+      console.log("Submitting Lengths", selectedDigits);
       const { ok, status, statusText, data } = await bridgeFetch<any>(
         `${API_URL}/pipeline`,
         {
@@ -604,48 +636,25 @@ export default function Home() {
                                 variant="soft"
                                 size="sm"
                                 onClick={() => {
-                                  // flat list of all alleles in current dataset
-                                  const allAlleles = selectedSpeciesLocus
-                                    .flatMap(
-                                      (sl) => speciesLocusToMhcAlleles[sl] || []
-                                    )
-                                    .map((a) => a.toUpperCase().trim());
-                                  // normalize all alleles list
-                                  const normalizedAllAlleles = allAlleles.map(
-                                    (a) =>
-                                      a.startsWith("HLA-") ? a.slice(4) : a
+                                  const allAlleles = normalizeAlleles(
+                                    selectedSpeciesLocus.flatMap((sl) => speciesLocusToMhcAlleles[sl] || [])
                                   );
-                                  // normalize human coverage list
-                                  const normalizedPanel =
-                                    humanCoverageMhciAlleles.map((a) =>
-                                      a
-                                        .toUpperCase()
-                                        .replace(/^HLA-/, "")
-                                        .trim()
-                                    );
-                                  // button toggle logic
+                                  const coveragePanel = normalizeAlleles(humanCoverageMhciAlleles);
+
                                   if (!isMhciCoverageSelected) {
-                                    const available = normalizedPanel.filter(
-                                      (a) => normalizedAllAlleles.includes(a)
-                                    );
+                                    const available = coveragePanel.filter((a) => allAlleles.includes(a));
                                     if (available.length === 0) {
                                       alert(
                                         "No matching human alleles found for this predictor.\nTry switching back to human or using NetMHCpan EL/BA."
                                       );
                                       return;
                                     }
-                                    // prefix back with HLA-
-                                    const prefixedAvailable = available.map(
-                                      (a) =>
-                                        a.startsWith("HLA-") ? a : `HLA-${a}`
-                                    );
-                                    setSelectedMhcAlleles(prefixedAvailable);
+
+                                    setSelectedMhcAlleles(normalizeAlleles(available));
                                     setIsMhciCoverageSelected(true);
-                                    // console.log("Applied 27 Allele MHC-I Panel:", prefixedAvailable);
                                   } else {
                                     setSelectedMhcAlleles([]);
                                     setIsMhciCoverageSelected(false);
-                                    // console.log("Cleared MHC-I Coverage Alleles");
                                   }
                                 }}
                                 sx={{
@@ -703,43 +712,25 @@ export default function Home() {
                             variant="soft"
                             size="sm"
                             onClick={() => {
-                              // flat list of all alleles in current dataset
-                              const allAlleles = Object.values(
-                                speciesLocusToMhcAlleles
-                              )
-                                .flat()
-                                .map((a) => a.toUpperCase().trim());
-                              // normalize all alleles list
-                              const normalizedAllAlleles = allAlleles.map((a) =>
-                                a.startsWith("HLA-") ? a.slice(4) : a
+                              const allAlleles = normalizeAlleles(
+                                selectedSpeciesLocus.flatMap((sl) => speciesLocusToMhcAlleles[sl] || [])
                               );
-                              // normalize human coverage list
-                              const normalizedCoverage =
-                                humanCoverageMhciiAlleles.map((a) =>
-                                  a.toUpperCase().replace(/^HLA-/, "").trim()
-                                );
-                              // button toggle logic
+                              const coveragePanel = normalizeAlleles(humanCoverageMhciiAlleles);
+
                               if (!isCoverageSelected) {
-                                const available = normalizedCoverage.filter(
-                                  (a) => normalizedAllAlleles.includes(a)
-                                );
+                                const available = coveragePanel.filter((a) => allAlleles.includes(a));
                                 if (available.length === 0) {
                                   alert(
                                     "No matching alleles found for this predictor.\nTry switching to NetMHCIIpan EL or BA."
                                   );
                                   return;
                                 }
-                                // prefix back with HLA-
-                                const prefixedAvailable = available.map((a) =>
-                                  a.startsWith("HLA-") ? a : `HLA-${a}`
-                                );
-                                setSelectedMhcAlleles(prefixedAvailable);
+
+                                setSelectedMhcAlleles(normalizeAlleles(available));
                                 setIsCoverageSelected(true);
-                                // console.log("Applied 27 Allele MHC-II Panel:", prefixedAvailable);
                               } else {
                                 setSelectedMhcAlleles([]);
                                 setIsCoverageSelected(false);
-                                // console.log("Cleared MHC-II Coverage Alleles");
                               }
                             }}
                             sx={{
