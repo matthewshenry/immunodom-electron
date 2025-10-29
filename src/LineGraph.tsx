@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, CartesianGrid, XAxis, YAxis, Label, ReferenceLine, Tooltip, ReferenceArea, ResponsiveContainer } from 'recharts';
 import { Modal, Box, Typography, IconButton, Button } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
@@ -172,9 +172,12 @@ const LineGraph: React.FC<LineGraphProps> = ({ dataSets, width, height, lineThic
     setRefAreaRight('');
   };
 
+  const refAreaRightRef = useRef('');
+
   const handleMouseMoveWithDrag = (e: any) => {
     if (refAreaLeft) {
-      setRefAreaRight(e.activeLabel);
+      //setRefAreaRight(e.activeLabel);
+      refAreaRightRef.current = e.activeLabel;
       setIsDragging(true);
     }
   };
@@ -182,7 +185,7 @@ const LineGraph: React.FC<LineGraphProps> = ({ dataSets, width, height, lineThic
   const handleClick = (e: any) => {
     if (!isDragging && e && e.activeLabel) {
       const clickedData = dataSets.map(data => data.find(d => d.start === e.activeLabel)).filter(d => d !== undefined) as DataRow[];
-      if (clickedData) {
+      if (clickedData.length > 0) {
         setPopupData(clickedData);
       }
     }
@@ -262,7 +265,7 @@ const LineGraph: React.FC<LineGraphProps> = ({ dataSets, width, height, lineThic
                   connectNulls={false}
                 />
               ))}
-              {tooltipVisible && <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'red', strokeWidth: lineThickness }} />}
+              {tooltipVisible && <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'red', strokeWidth: lineThickness }}/>}
               <CartesianGrid stroke="#ccc" strokeDasharray="5 5" />
               <XAxis
                 key={`x-axis-${left}-${right}`}
@@ -322,6 +325,7 @@ const LineGraph: React.FC<LineGraphProps> = ({ dataSets, width, height, lineThic
               >
                 <CloseIcon />
               </IconButton>
+
               <Typography variant="h6" gutterBottom>
                 Data Point Information
               </Typography>
