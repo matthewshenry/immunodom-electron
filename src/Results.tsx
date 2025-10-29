@@ -170,6 +170,44 @@ export default function Results() {
   const [endError, setEndError] = useState(false);
   const [kdStartError, setKdStartError] = useState(false);
   const [kdEndError, setKdEndError] = useState(false);
+  const [sortConfig, setSortConfig] = useState<{
+    key: string;
+    direction: "asc" | "desc";
+  } | null>(null);
+
+  const handleSort = (key: string) => {
+    let direction: "asc" | "desc" = "asc";
+
+    // If the same column is clicked again, toggle direction
+    if (
+      sortConfig &&
+      sortConfig.key === key &&
+      sortConfig.direction === "asc"
+    ) {
+      direction = "desc";
+    }
+
+    setSortConfig({ key, direction });
+
+    // Copy data so we don't mutate state directly
+    const sorted = [...filteredDataForTable].sort((a, b) => {
+      const valA = a[key];
+      const valB = b[key];
+
+      if (valA == null || valB == null) return 0;
+
+      if (typeof valA === "number" && typeof valB === "number") {
+        return direction === "asc" ? valA - valB : valB - valA;
+      }
+
+      // For text columns
+      return direction === "asc"
+        ? String(valA).localeCompare(String(valB))
+        : String(valB).localeCompare(String(valA));
+    });
+
+    setFilteredDataForTable(sorted);
+  };
 
   // Poll new gen IEDB tools until done
   useEffect(() => {
@@ -946,6 +984,7 @@ export default function Results() {
                     setStartRange({ start: null, end: null });
                     setKdStart(null);
                     setKdEnd(null);
+                    setSortConfig(null);
                   }}
                   className="clear-filter-icon"
                 >
@@ -981,19 +1020,78 @@ export default function Results() {
                 {/* Table Column Headers */}
                 <TableHead>
                   <TableRow sx={{ backgroundColor: "#f4f4f4" }}>
-                    <TableCell sx={{ fontWeight: 600 }}>Data Set</TableCell>
+                    <TableCell align="center" sx={{ fontWeight: 600 }}>
+                      Data Set
+                    </TableCell>
+
                     {csvHeaders
                       .filter((h) => h !== "datasetIndex")
                       .map((h) => (
                         <TableCell
-                          align="center"
                           key={h}
-                          sx={{ fontWeight: 600, textTransform: "capitalize" }}
+                          align="center"
+                          sx={{
+                            fontWeight: 600,
+                            textTransform: "capitalize",
+                            cursor: ["kd", "length", "peptide_length"].includes(
+                              h
+                            )
+                              ? "pointer"
+                              : "default",
+                            transition: "color 0.2s ease",
+                            "&:hover": {
+                              color: [
+                                "kd",
+                                "length",
+                                "peptide_length",
+                              ].includes(h)
+                                ? "#1976d2"
+                                : "inherit",
+                            },
+                          }}
+                          onClick={() => {
+                            if (
+                              ["kd", "length", "peptide_length"].includes(h)
+                            ) {
+                              handleSort(h);
+                            }
+                          }}
                         >
+                          {/* Display header label with sort arrow if applicable */}
                           {h === "kd" ? (
-                            <span>
+                            <>
                               K<sub>d</sub>
-                            </span>
+                              <span
+                                style={{
+                                  marginLeft: 6,
+                                  color:
+                                    sortConfig?.key === h ? "#000" : "#bbb",
+                                }}
+                              >
+                                {sortConfig?.key === h
+                                  ? sortConfig.direction === "asc"
+                                    ? "▲"
+                                    : "▼"
+                                  : "⇅"}
+                              </span>
+                            </>
+                          ) : h === "length" || h === "peptide_length" ? (
+                            <>
+                              Length
+                              <span
+                                style={{
+                                  marginLeft: 6,
+                                  color:
+                                    sortConfig?.key === h ? "#000" : "#bbb",
+                                }}
+                              >
+                                {sortConfig?.key === h
+                                  ? sortConfig.direction === "asc"
+                                    ? "▲"
+                                    : "▼"
+                                  : "⇅"}
+                              </span>
+                            </>
                           ) : (
                             h
                           )}
