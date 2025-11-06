@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { LineChart, Line, CartesianGrid, XAxis, YAxis, Label, ReferenceLine, Tooltip, ReferenceArea, ResponsiveContainer } from 'recharts';
+import React, { useState, useEffect, useMemo } from 'react';
+import { LineChart, ScatterChart, Line, Scatter, CartesianGrid, XAxis, YAxis, Label, ReferenceLine, Tooltip, ReferenceArea, ResponsiveContainer} from 'recharts';
 import { Modal, Box, Typography, IconButton, Button } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { ScaleType } from 'recharts/types/util/types';
+import { ScatterPlot } from '@mui/icons-material';
 
 interface DataRow {
   allele: string;
@@ -172,12 +173,9 @@ const LineGraph: React.FC<LineGraphProps> = ({ dataSets, width, height, lineThic
     setRefAreaRight('');
   };
 
-  const refAreaRightRef = useRef('');
-
   const handleMouseMoveWithDrag = (e: any) => {
     if (refAreaLeft) {
-      //setRefAreaRight(e.activeLabel);
-      refAreaRightRef.current = e.activeLabel;
+      setRefAreaRight(e.activeLabel);
       setIsDragging(true);
     }
   };
@@ -198,8 +196,8 @@ const LineGraph: React.FC<LineGraphProps> = ({ dataSets, width, height, lineThic
         key={`dot-${datasetIndex}-${dataIndex}`}
         cx={cx}
         cy={cy}
-        r={3}
-        fill="black"
+        r={5}
+        fill="green"
         stroke="white"
         strokeWidth={1}
         onClick={() => handlePointClick(payload, datasetIndex)}
@@ -235,7 +233,7 @@ const LineGraph: React.FC<LineGraphProps> = ({ dataSets, width, height, lineThic
     index: dataSet[0]?.datasetIndex,
   }));
 
-  const processedDataSets = preprocessData(dataSets, 1); // Adjust gapThreshold as needed
+  //const processedDataSets = preprocessData(dataSets, 1); // Adjust gapThreshold as needed
 
   return (
     <div style={{ width: '100%', height: '100%', userSelect: 'none' }}>
@@ -243,7 +241,7 @@ const LineGraph: React.FC<LineGraphProps> = ({ dataSets, width, height, lineThic
       <div ref={chartContainerRef}>
         <ResponsiveContainer>
           <div>
-            <LineChart
+            <ScatterChart
               width={width}
               height={height}
               margin={{ top: 20, right: 30, bottom: 50, left: 20 }} 
@@ -252,17 +250,15 @@ const LineGraph: React.FC<LineGraphProps> = ({ dataSets, width, height, lineThic
               onMouseUp={handleMouseUp}
               onClick={handleClick}
             >
-              {processedDataSets.map((data, datasetIndex) => (
-                <Line
-                  key={`line-${datasetIndex}`} 
+              {dataSets.map((data, datasetIndex) => (
+                <Scatter
+                  key={`scatter-${datasetIndex}`} 
                   type="monotone"
                   dataKey="kd"
                   data={data}
                   stroke={data[0]?.color}
                   strokeWidth={lineThickness}
-                  dot={<CustomDot handlePointClick={handlePointClick} datasetIndex={datasetIndex} />}
-                  activeDot={false}
-                  connectNulls={false}
+                  shape={<CustomDot handlePointClick={handlePointClick} datasetIndex={datasetIndex} />}
                 />
               ))}
               {tooltipVisible && <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'red', strokeWidth: lineThickness }}/>}
@@ -291,7 +287,7 @@ const LineGraph: React.FC<LineGraphProps> = ({ dataSets, width, height, lineThic
               {refAreaLeft && refAreaRight && refAreaLeft !== refAreaRight ? (
                 <ReferenceArea x1={refAreaLeft} x2={refAreaRight} strokeOpacity={0.3} />
               ) : null}
-            </LineChart>
+            </ScatterChart>
           </div>
         </ResponsiveContainer>
       </div>
