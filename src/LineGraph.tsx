@@ -29,6 +29,7 @@ interface LineGraphProps {
   scaleType: ScaleType | Function;
   colors: string[];
   chartContainerRef: React.RefObject<HTMLDivElement>;
+  fullSequence?: string;
 }
 
 const preprocessData = (dataSets: DataRow[][], gapThreshold: number) => {
@@ -85,7 +86,7 @@ const preprocessData = (dataSets: DataRow[][], gapThreshold: number) => {
   });
 };
 
-const LineGraph: React.FC<LineGraphProps> = ({ dataSets, width, height, lineThickness, yAxisRange, scaleType, colors, chartContainerRef }) => {
+const LineGraph: React.FC<LineGraphProps> = ({ dataSets, width, height, lineThickness, yAxisRange, scaleType, colors, chartContainerRef, fullSequence }) => {
   const [popupData, setPopupData] = useState<DataRow[] | null>(null);
   const [showMore, setShowMore] = useState<boolean[]>([]);
   const [refAreaLeft, setRefAreaLeft] = useState<number | string>('');
@@ -96,6 +97,14 @@ const LineGraph: React.FC<LineGraphProps> = ({ dataSets, width, height, lineThic
   const [tooltipVisible, setTooltipVisible] = useState<boolean>(true);
   const [minValue, setMinValue] = useState<number | string>('dataMin');
   const [maxValue, setMaxValue] = useState<number | string>('dataMax');
+
+  const getBaseSeq = (row: DataRow): string => {
+    if (fullSequence && fullSequence.trim().length > 0) {
+      return fullSequence;
+    }
+    return row.sequence_text || "";
+  };
+
 
   useEffect(() => {
     if (dataSets.length > 0) {
@@ -340,11 +349,20 @@ const LineGraph: React.FC<LineGraphProps> = ({ dataSets, width, height, lineThic
                     <Typography sx={{ color: data.color }}>
                       <strong>Method:</strong> {data.method}
                     </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', color: data.color, wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        color: data.color,
+                        wordBreak: 'break-all',
+                        whiteSpace: 'pre-wrap',
+                      }}
+                    >
                       <Typography component="span">
-                        <strong>Sequence:</strong> {showMore[index] ? data.sequence_text : `${data.sequence_text.slice(0, 15)}...`}
+                        <strong>Sequence:</strong>{" "}
+                        {showMore[index] ? getBaseSeq(data) : `${getBaseSeq(data).slice(0, 15)}...`}
                         <Button size="small" onClick={() => toggleShowMore(index)}>
-                          {showMore[index] ? 'Show Less' : 'Show More'}
+                          {showMore[index] ? "Show Less" : "Show More"}
                         </Button>
                       </Typography>
                     </Box>

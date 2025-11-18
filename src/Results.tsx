@@ -47,6 +47,82 @@ import { ScaleType } from "recharts/types/util/types";
 import html2canvas from "html2canvas";
 import { bridgeFetch } from "./api";
 
+const ChartPanel = React.memo(
+  ({
+    dataSets,
+    width,
+    height,
+    lineThickness,
+    yAxisRange,
+    scaleType,
+    colors,
+    legendItems,
+    chartContainerRef,
+    fullSequence,
+  }) => (
+    <>
+      <Box sx={{ maxWidth: width, height, mx: "auto" }} ref={chartContainerRef}>
+        <LineGraph
+          dataSets={dataSets}
+          width={width}
+          height={height}
+          lineThickness={lineThickness}
+          yAxisRange={yAxisRange}
+          scaleType={scaleType}
+          colors={colors}
+          chartContainerRef={chartContainerRef}
+          fullSequence={fullSequence}
+        />
+      </Box>
+
+      {legendItems.length > 0 && (
+        <Box
+          sx={{
+            display: "flex",
+            flexWrap: "wrap",
+            justifyContent: "center",
+            gap: 1.5,
+            backgroundColor: "#fff",
+            borderRadius: 2,
+            boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
+            p: 2,
+            mb: 1.5,
+          }}
+        >
+          {legendItems.map(({ key, color, label }) => (
+            <Box
+              key={key}
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+                px: 1,
+                py: 0.5,
+                borderRadius: 1.5,
+                backgroundColor: "#f8f9fb",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+              }}
+            >
+              <Box
+                sx={{
+                  width: 14,
+                  height: 14,
+                  borderRadius: "50%",
+                  backgroundColor: color,
+                  mr: 1,
+                }}
+              />
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                {label}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+      )}
+    </>
+  )
+);
+
 type TableColumn = { name: string; display_name?: string };
 type PeptideTable = {
   type: "peptide_table";
@@ -109,6 +185,9 @@ export default function Results() {
       result_id?: string;
       results_uri?: string;
       type?: "mhci" | "mhcii";
+      input_sequence_text?: string;
+      submit_ts?: number; 
+      selected_method?: string;
     };
   };
   const runType = location.state?.type || "mhci";
@@ -116,6 +195,8 @@ export default function Results() {
   const resultsUri = location.state?.results_uri;
   const pollUrl =
     resultsUri || (resultId ? `${API_URL}/results/${resultId}` : "");
+  const fullSequenceFromInput = location.state?.input_sequence_text || "";
+  const selectedMethodFromState = location.state?.selected_method || "";
 
   // refs for downloads
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -329,7 +410,9 @@ export default function Results() {
           kdVal = Math.round(Math.pow(50000, 1 - score));
         const rankVal = idxRank >= 0 ? Number(r[idxRank]) : NaN;
         const seqTxt = idxSeqTxt >= 0 ? String(r[idxSeqTxt]) : "";
-        const method = idxMethod >= 0 ? String(r[idxMethod]) : "";
+        const colMethod =
+          idxMethod >= 0 ? String(r[idxMethod]).trim() : "";
+        const method = colMethod || selectedMethodFromState;
         const seqNum = idxSeqNum >= 0 ? Number(r[idxSeqNum]) : 1;
 
         return {
@@ -437,6 +520,26 @@ export default function Results() {
     }
   }, [submitTs, status, dataForGraph]);
 
+  //memoize color palette so it doesn't re-render
+  const colorPalette = useMemo(
+    () => generateColors(Math.max(1, dataForGraph.length)),
+    [dataForGraph.length]
+  );
+    
+  //memoize legend model derived from dataForGraph
+  type LegendItem = {key:number;color:string;label:string};
+
+  const legendItems = useMemo<LegendItem[]>(
+    () =>
+      dataForGraph.map((alleleSet, idx) => ({
+        key: idx,
+        color: alleleSet[0]?.color || "#555",
+        label: alleleSet[0]?.allele || `Set ${idx + 1}`,
+      })),
+    [dataForGraph]
+  );
+
+  
   // controls
   const handleResultChange = (event: SelectChangeEvent<number[]>) => {
     const val = event.target.value as number[];
@@ -820,84 +923,20 @@ export default function Results() {
               </Box>
             ) : (
               <>
-                {/* Graph */}
-                <Box
-                  ref={chartContainerRef}
-                  className="line-graph-container"
-                  sx={{
-                    width: "90%",
-                    maxWidth: 900,
-                    height: 500,
-                    mb: 3,
-                  }}
-                >
-                  <LineGraph
-                    dataSets={dataForGraph}
-                    width={900}
-                    height={500}
-                    lineThickness={lineThickness}
-                    yAxisRange={yAxisRange}
-                    scaleType={scaleType}
-                    colors={generateColors(Math.max(1, dataForGraph.length))}
-                    chartContainerRef={chartContainerRef}
-                  />
-                </Box>
+                <ChartPanel
+                  dataSets={dataForGraph}
+                  width={900}
+                  height={500}
+                  lineThickness={lineThickness}
+                  yAxisRange={yAxisRange}
+                  scaleType={scaleType}
+                  colors={colorPalette}
+                  legendItems={legendItems}
+                  chartContainerRef={chartContainerRef}
+                  fullSequence={fullSequenceFromInput}
+                />
 
-                {/* Responsive, wrapping legend below graph */}
-                {dataForGraph.length > 0 && (
-                  <Box
-                    sx={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      justifyContent: "center",
-                      gap: 1.5,
-                      backgroundColor: "#fff",
-                      borderRadius: 2,
-                      boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
-                      p: 2,
-                      mb: 4,
-                      width: "90%",
-                      maxWidth: 900,
-                      opacity: dataForGraph.length > 0 ? 1 : 0,
-                      transition: "opacity 0.3s ease-in-out",
-                    }}
-                  >
-                    {dataForGraph.map((alleleSet, idx) => (
-                      <Box
-                        key={idx}
-                        sx={{
-                          display: "flex",
-                          alignItems: "center",
-                          px: 1,
-                          py: 0.5,
-                          borderRadius: 1,
-                          border: "1px solid #e0e0e0",
-                          backgroundColor: "#fff",
-                        }}
-                      >
-                        <Box
-                          sx={{
-                            width: 14,
-                            height: 14,
-                            borderRadius: "50%",
-                            backgroundColor: alleleSet[0]?.color || "#555",
-                            mr: 1,
-                          }}
-                        />
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            color: "text.primary",
-                            fontWeight: 500,
-                          }}
-                        >
-                          {alleleSet[0]?.allele || `Set ${idx + 1}`}
-                        </Typography>
-                      </Box>
-                    ))}
-                  </Box>
-                )}
-
+                                
                 {/* Buttons aligned under legend */}
                 <Box sx={{ display: "flex", gap: 1, mb: 2 }}>
                   <IconButton

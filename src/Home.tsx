@@ -297,9 +297,10 @@ export default function Home() {
       };
 
       const toolGroup = type === "mhcii" ? "mhcii" : "mhci";
+      const uiMethodValue = (formJson.predictionMethod || "").toString();
       const ngMethod = mapMethod(
         toolGroup,
-        (formJson.predictionMethod || "").toString()
+        uiMethodValue
       );
       if (!ngMethod) {
         throw new Error(
@@ -307,6 +308,10 @@ export default function Home() {
         );
       }
 
+      const methodsList = toolGroup === "mhci" ? mhciMethods : mhciiMethods;
+      const selectedMethodLabel =
+        methodsList.find((m) => m.value === uiMethodValue)?.label ||
+        uiMethodValue;
       // 3) Alleles: NG Tools expects a comma-separated string (not array)
       // https://nextgen-tools.iedb.org/docs/api/endpoints/api_references.html
       // normalize alleles to "HLA-*" format and capitalization for typed entries
@@ -399,6 +404,8 @@ export default function Home() {
           result_id: data.result_id,
           results_uri: data.results_uri,
           submit_ts: submitTs,
+          input_sequence_text,
+          selected_method: selectedMethodLabel,
         },
       });
     } catch (e: any) {
