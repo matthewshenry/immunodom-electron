@@ -32,7 +32,7 @@ interface LineGraphProps {
   chartContainerRef: React.RefObject<HTMLDivElement>;
 }
 
-const preprocessData = (dataSets: DataRow[][], gapThreshold: number) => {
+/*const preprocessData = (dataSets: DataRow[][], gapThreshold: number) => {
   return dataSets.map(dataSet => {
     const processedData: DataRow[] = [];
 
@@ -52,7 +52,7 @@ const preprocessData = (dataSets: DataRow[][], gapThreshold: number) => {
         processedData.push({
           ...dataSet[i],
           start: dataSet[i].start + 1,
-          kd: 20000, // Insert a value of 20000 to indicate the start of the gap
+          kd: 8000, // Insert a value of 20000 to indicate the start of the gap
           color: dataSet[i].color,
         });
         for (let j = dataSet[i].start + 2; j < dataSet[i + 1].start; j++) {
@@ -84,7 +84,7 @@ const preprocessData = (dataSets: DataRow[][], gapThreshold: number) => {
 
     return processedData;
   });
-};
+};*/
 
 const LineGraph: React.FC<LineGraphProps> = ({ dataSets, width, height, lineThickness, yAxisRange, scaleType, colors, chartContainerRef }) => {
   const [popupData, setPopupData] = useState<DataRow[] | null>(null);
@@ -191,28 +191,31 @@ const LineGraph: React.FC<LineGraphProps> = ({ dataSets, width, height, lineThic
 
   const CustomDot = (props: any) => {
     const { cx, cy, payload, datasetIndex, dataIndex, handlePointClick } = props;
+    
     return (
       <circle
         key={`dot-${datasetIndex}-${dataIndex}`}
         cx={cx}
         cy={cy}
-        r={5}
-        fill="green"
+        r={6}
+        fill={payload.color}
         stroke="white"
         strokeWidth={1}
-        onClick={() => handlePointClick(payload, datasetIndex)}
+        pointerEvents="all"
+        onClick={(e) => {e.stopPropagation(); console.log("Dot clicked", payload); handlePointClick(payload, datasetIndex)}}
+        style = {{cursor: "pointer"}}
       />
     );
   };
 
-  const CustomTooltip: React.FC<{ active?: boolean, payload?: any[], label?: string }> = ({ active, label }) => {
+  /*const CustomTooltip: React.FC<{ active?: boolean, payload?: any[], label?: string }> = ({ active, label }) => null{
     if (active && label) {
       return (
         <div style={{ position: 'absolute', left: `${label}px`, top: 0, bottom: 0, width: '2px', backgroundColor: 'red' }} />
       );
     }
     return null;
-  };
+  };*/
 
   const CustomYAxisLabel = ({ viewBox }: { viewBox?: any }) => {
     const { x, y, width, height } = viewBox;
@@ -253,15 +256,11 @@ const LineGraph: React.FC<LineGraphProps> = ({ dataSets, width, height, lineThic
               {dataSets.map((data, datasetIndex) => (
                 <Scatter
                   key={`scatter-${datasetIndex}`} 
-                  type="monotone"
                   dataKey="kd"
                   data={data}
-                  stroke={data[0]?.color}
-                  strokeWidth={lineThickness}
-                  shape={<CustomDot handlePointClick={handlePointClick} datasetIndex={datasetIndex} />}
+                  shape={(props: any) => (<CustomDot {...props} handlePointClick={handlePointClick} datasetIndex={datasetIndex}/>)}
                 />
               ))}
-              {tooltipVisible && <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'red', strokeWidth: lineThickness }}/>}
               <CartesianGrid stroke="#ccc" strokeDasharray="5 5" />
               <XAxis
                 key={`x-axis-${left}-${right}`}
